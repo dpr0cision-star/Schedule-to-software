@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Schedule to Takeoff</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one working column, three numbered stages (sources, job defaults, openings grid); the grid is the only wide thing and scrolls inside itself. */
+:root{
+  --bg:#f2eedf; --panel:#fbf9f0; --ink:#17251c; --muted:#5d6a5f; --line:#d2ccb6;
+  --accent:#1f4d33; --accent-ink:#fbf9f0; --fill:#d6ecc4; --fill-ink:#1b3a10;
+  --warn:#f6dc8f; --warn-ink:#4f3800; --red:#a3261d; --head:#e6e1cd;
+  --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0f1712; --panel:#17221a; --ink:#e9e6d6; --muted:#9aa696; --line:#2c3b30;
+  --accent:#8fca9f; --accent-ink:#0f1712; --fill:#23401c; --fill-ink:#cfeab8;
+  --warn:#4d3b0c; --warn-ink:#f6dc9a; --red:#f08a82; --head:#1e2b22; color-scheme:dark } }
+:root[data-theme="dark"]{
+  --bg:#0f1712; --panel:#17221a; --ink:#e9e6d6; --muted:#9aa696; --line:#2c3b30;
+  --accent:#8fca9f; --accent-ink:#0f1712; --fill:#23401c; --fill-ink:#cfeab8;
+  --warn:#4d3b0c; --warn-ink:#f6dc9a; --red:#f08a82; --head:#1e2b22; color-scheme:dark }
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:16px;padding-block:24px 48px;display:flex;flex-direction:column;gap:20px}
+h1{font-family:var(--display);font-weight:600;font-size:2.1rem;line-height:1.05;margin:0;letter-spacing:.01em;text-wrap:balance}
+.lede{color:var(--muted);margin:6px 0 0;max-width:65ch}
+section{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+h2{font-family:var(--display);font-weight:600;font-size:1.3rem;margin:0;display:flex;gap:10px;align-items:baseline;letter-spacing:.02em}
+h2 .n{color:var(--accent);font-variant-numeric:tabular-nums}
+.hint{color:var(--muted);font-size:.87rem;margin:0;max-width:75ch}
+button,.btn{font:inherit;font-weight:500;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:7px 12px;border-radius:3px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button:disabled{opacity:.5;cursor:not-allowed}
+button:focus-visible,input:focus-visible,.drop:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.drop{border:1.5px dashed var(--line);border-radius:4px;padding:22px 16px;text-align:center;cursor:pointer;color:var(--muted)}
+.drop.over{border-color:var(--accent);color:var(--ink)}
+.drop b{color:var(--ink)}
+.srcs{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.src{border:1px solid var(--line);border-radius:3px;padding:8px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.src.off{opacity:.55}
+.src canvas{width:100%;height:110px;object-fit:contain;background:var(--head)}
+.src .nm{font-size:.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.src .row{gap:4px;justify-content:space-between}
+.src button{padding:2px 7px;font-size:.8rem}
+.src label{font-size:.8rem;display:flex;gap:4px;align-items:center}
+.defs{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px 10px}
+.defs label,.fld{display:flex;flex-direction:column;gap:3px;font-family:var(--display);font-size:.82rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.defs input,.fld input{font:500 .85rem var(--mono);padding:6px 7px;border:1px solid var(--line);border-radius:3px;background:var(--fill);color:var(--fill-ink);min-width:0;width:100%}
+details summary{cursor:pointer;font-weight:500}
+details[open] summary{margin-bottom:10px}
+.status{font-size:.9rem;color:var(--muted);min-height:1.4em}
+.status.err{color:var(--red)}
+.gridbox{overflow-x:auto;border:1px solid var(--line);border-radius:3px;max-height:70vh;overflow-y:auto}
+table{border-collapse:separate;border-spacing:0;font-family:var(--mono);font-size:.8rem;font-variant-numeric:tabular-nums}
+th,td{border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:0;background:var(--panel)}
+thead th{position:sticky;top:0;z-index:2;background:var(--head);vertical-align:bottom;padding:6px 2px}
+thead th span{writing-mode:vertical-rl;transform:rotate(180deg);font:500 .78rem var(--display);letter-spacing:.06em;white-space:nowrap;color:var(--ink)}
+th.pin,td.pin{position:sticky;left:0;z-index:1;background:var(--head);padding:2px 6px;white-space:nowrap;text-align:left;font-weight:500}
+thead th.pin{z-index:3}
+td input[type=text]{font:inherit;border:0;background:transparent;color:inherit;padding:4px 5px;box-sizing:content-box}
+td.d{background:var(--fill);color:var(--fill-ink)}
+td.q{background:var(--warn);color:var(--warn-ink)}
+tr.skip td:not(.pin){opacity:.4;text-decoration:line-through}
+.key{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.8rem;color:var(--muted)}
+.key i{display:inline-block;width:12px;height:12px;border:1px solid var(--line);vertical-align:-2px;margin-right:4px}
+.banner{background:var(--warn);color:var(--warn-ink);padding:8px 10px;border-radius:3px;font-size:.87rem}
+select{font:inherit;padding:5px;border:1px solid var(--line);border-radius:3px;background:var(--panel);color:var(--ink)}
+.mapbox{overflow-x:auto}
+.mapbox table{font-size:.78rem}
+.mapbox td,.mapbox th{padding:3px 6px;text-align:left;font-weight:400;white-space:nowrap;max-width:26ch;overflow:hidden;text-overflow:ellipsis}
+.mapbox th{background:var(--head);font-family:var(--body)}
+.mapbox h3{font:600 .85rem var(--body);margin:10px 0 4px}
+textarea{width:100%;height:120px;font:.75rem var(--mono);background:var(--panel);color:var(--ink);border:1px solid var(--line)}
+@media (prefers-reduced-motion:no-preference){button{transition:border-color .12s}}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Schedule to Takeoff</h1>
+    <p class="lede">Drop in a door schedule as a PDF or photo. The page reads each opening right in your browser, with no account and no per-use charge. You check the rows, and it saves a .txt file laid out for the e-mullions Import template.</p>
+  </header>
+
+  <section>
+    <h2><span class="n">1</span> Add the door schedule</h2>
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose files"><b>Drop PDFs, photos or copied text here</b>, or click to choose. You can also paste a screenshot or copied schedule lines anywhere on the page.</div>
+    <div class="row" style="align-items:stretch"><textarea id="pasteBox" style="flex:1;min-width:220px;height:74px" placeholder="Or paste schedule lines here. Copy the rows from the PDF (include the heading row if you can), one opening per line."></textarea><button id="addText">Add pasted lines</button></div>
+    <input type="file" id="file" accept="application/pdf,image/*" multiple hidden>
+    <div class="srcs" id="srcs"></div>
+    <p class="hint" id="srchint">Tick only the sheets that hold the schedule. PDFs exported from the drawing software read best, because the text is already in the file. Photos and scans are read by OCR, which is slower and makes more mistakes: turn a sideways thumbnail upright with Rotate, and use a straight, close, sharp shot of just the schedule.</p>
+  </section>
+
+  <section>
+    <h2><span class="n">2</span> Job defaults</h2>
+    <p class="hint">These go on every opening, the same way you would fill them down in e-mullions. Leave a box empty to use what the schedule says (or nothing). They are remembered on this device.</p>
+    <details id="defwrap" open><summary>Manufacturer, series, finish</summary><div class="defs" id="defs"></div></details>
+    <div class="row">
+      <label><input type="checkbox" id="optDet" checked> Fill head / jamb / sill detail columns</label>
+      <label><input type="checkbox" id="optSwap"> Swap outside / inside location</label>
+    </div>
+    <div class="row">
+      <button class="primary" id="go">Read schedule</button>
+      <button id="stop" hidden>Stop</button>
+      <label><input type="checkbox" id="optAppend"> Add to the rows already in the grid</label>
+    </div>
+    <div class="status" id="status" role="status"></div>
+  </section>
+
+  <section>
+    <h2><span class="n">3</span> Openings <span id="count" style="font:400 .9rem var(--body);color:var(--muted)"></span></h2>
+    <div class="banner" id="sampleNote">Example rows: Well Nos. 44/44A and the booster building, from the schedule you sent earlier. They are replaced when you read a new schedule.</div>
+    <details id="mapwrap" hidden><summary>Columns found on the schedule</summary><p class="hint">If a column landed in the wrong place, pick what it really is and the grid rebuilds. Rebuilding discards edits typed into the grid, so fix columns first. Your choices are remembered for schedules with the same headings.</p><div id="map" class="mapbox"></div></details>
+    <div class="gridbox"><table id="grid"><thead></thead><tbody></tbody></table></div>
+    <div class="key"><span><i style="background:var(--fill)"></i>from job defaults</span><span><i style="background:var(--warn)"></i>hard to read or needs a decision, check against the drawing</span><span>Untick a row to leave it out of the export.</span></div>
+    <div class="row">
+      <button id="add">Add row</button>
+      <button id="clear">Clear grid</button>
+      <span class="fld" style="flex-direction:row;align-items:center;gap:6px"><span>File name</span><input id="fname" value="takeoff" style="width:16ch;background:var(--panel);color:var(--ink)"></span>
+      <label>Format <select id="fmt"><option value="txt|,">.txt, e-mullions Import template (57 columns)</option><option value="txt|,|61">.txt, Import template with 4 spacer columns (61)</option><option value="txt|	">.txt, tab-delimited</option><option value="csv|,">.csv</option></select></label>
+      <label><input type="checkbox" id="optHead" checked> Header row</label>
+      <label><input type="checkbox" id="optParen"> Put sizes in parentheses</label>
+      <button class="primary" id="save">Save file</button>
+      <button id="copy">Copy rows for pasting</button>
+    </div>
+    <div class="status" id="status2" role="status"></div>
+    <textarea id="fallback" hidden readonly aria-label="File text"></textarea>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<script>
+const COLS=["QTY","MARK","AREA","INSIDE LOCATION","OUTSIDE LOCATION","OPG MODE","FR WIDTH","FR HEIGHT","DOOR TYPE","DOOR THICK","ARCH DOOR TYPE","DR REMARKS","DR LIST AGENCY","DR FIRE RATING","FR TYPE","ARCH FR TYPE","FR LIST AGENCY","FR FIRE RATING","FR REMARKS","GEN NOTES","HEADING","DR STC","DR MATL/FACE","DR FINISH","FR CONSTR","FR MATL","FR FINISH","GLASS THICKNESS","BLDG","FLOOR","WALL TYPE","HAND","DR MFGR","DR SERIES","DR GAUGE","FR MFGR","FR SERIES","FR GAUGE","WALL THICK","JAMB DEPTH","HEAD DETAIL","JAMB DETAIL","SILL DETAIL","PLAN PAGE","LEFT BASE ANCHOR","RIGHT BASE ANCHOR","LEFT JAMB ANCHOR","RIGHT JAMB ANCHOR","HEAD ANCHOR","FR PREPPING","DR PREPPING","MFG DR TYPE ACT","MFG DR TYPE INACT","FR STC","INT/EXT","DR UNDERCUT","DR CORE"];
+const ci=n=>COLS.indexOf(n),MK=COLS.indexOf("MARK");
+const PAREN=new Set(["FR WIDTH","FR HEIGHT","DR UNDERCUT"].map(n=>COLS.indexOf(n)));
+const DEF=[["BLDG",""],["FR MFGR","SPE"],["FR TYPE","FRPF"],["FR SERIES","AF-150"],["FR GAUGE",""],["FR MATL","FRP"],["FR FINISH","BONE WHITE"],["JAMB DEPTH","7 3/8"],["DOOR TYPE","FRPD"],["DR MFGR","SPE"],["DR SERIES","AF-100"],["DR GAUGE",""],["DR CORE","PU"],["DR UNDERCUT","3/4"],["DR MATL/FACE","FRP"],["DR FINISH","BONE WHITE"],["FLOOR",""]];
+const $=id=>document.getElementById(id);
+const state={rows:[],srcs:[],tables:[],isSample:true,busy:false};
+let stopped=false;
+
+/* ---------- job defaults ---------- */
+let saved={};try{saved=JSON.parse(localStorage.getItem("s2t-defs")||"{}")}catch(e){}
+$("defs").innerHTML=DEF.map(([k,v],i)=>`<label>${k}<input type="text" id="def${i}" data-k="${k}" value="${esc(k in saved?saved[k]:v)}"></label>`).join("");
+$("defs").addEventListener("input",()=>{try{localStorage.setItem("s2t-defs",JSON.stringify(defs()))}catch(e){}});
+function defs(){const o={};document.querySelectorAll("#defs input").forEach(i=>o[i.dataset.k]=i.value.trim());return o}
+function esc(s){return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+
+/* ---------- schedule row -> 59 takeoff columns ---------- */
+function ftIn(n){n=Number(n);if(!n||!isFinite(n))return"";const f=Math.floor(n/12);return f+"-"+(+(n-f*12).toFixed(3))}
+const clean=s=>{s=String(s??"").trim();return /^[-.–—]*$/.test(s)||/^n\/?a$/i.test(s)?"":s};
+const UNSURE={mark:["MARK","ARCH MARK"],building:["BLDG"],from_room:["INSIDE LOCATION","OUTSIDE LOCATION"],to_room:["INSIDE LOCATION","OUTSIDE LOCATION"],leaves:["OPG MODE","FR WIDTH","DR WIDTH INACT"],leaf_width_in:["FR WIDTH","DR WIDTH ACT"],height_in:["FR HEIGHT","DR HEIGHT"],thickness:["DOOR THICK"],door_type:["ARCH DOOR TYPE"],frame_type:["ARCH FR TYPE"],head:["HEAD DETAIL"],jamb:["JAMB DETAIL"],sill:["SILL DETAIL"],fire_rating:["FR FIRE RATING","DR FIRE RATING"],hardware_set:["HEADING"],comments:["DR REMARKS"]};
+function buildRow(x){
+  const d=defs(),v=Array(COLS.length).fill(""),fromDef=new Set(),flag=new Set();
+  const set=(n,val)=>{const i=ci(n);if(i>=0)v[i]=clean(val)};
+  const mark=clean(x.mark);v[MK]=mark;set("QTY","1");
+  const pair=Number(x.leaves)===2,w=Number(x.leaf_width_in)||0;
+  set("OPG MODE",pair?"PR":"SGL");
+  set("FR WIDTH",ftIn(pair?w*2:w));set("FR HEIGHT",ftIn(x.height_in));
+  set("DR WIDTH ACT",ftIn(w));set("DR WIDTH INACT",pair?ftIn(w):"");set("DR HEIGHT",ftIn(x.height_in));
+  set("DOOR THICK",String(x.thickness??"").replace(/["”]/g,""));
+  const swap=$("optSwap").checked;
+  set(swap?"INSIDE LOCATION":"OUTSIDE LOCATION",x.to_room);set(swap?"OUTSIDE LOCATION":"INSIDE LOCATION",x.from_room);
+  set("HEADING",x.hardware_set);set("ARCH FR TYPE",x.frame_type);set("ARCH DOOR TYPE",x.door_type);
+  const rt=clean(x.fire_rating);set("FR FIRE RATING",rt);set("DR FIRE RATING",rt);
+  if($("optDet").checked){set("HEAD DETAIL",x.head);set("JAMB DETAIL",x.jamb);set("SILL DETAIL",x.sill)}
+  set("DR REMARKS",x.comments);
+  set("BLDG",x.building);set("FR MATL",x.frame_material);set("FR FINISH",x.frame_finish);set("DR MATL/FACE",x.door_material);set("DR FINISH",x.door_finish);
+  for(const k in d)if(d[k]&&ci(k)>=0){v[ci(k)]=d[k];fromDef.add(ci(k))}
+  const ext=/\bEXT/i.test((x.to_room||"")+" "+(x.from_room||""));set("INT/EXT",ext?"EXT":"INT");
+  if(rt)["FR SERIES","DR SERIES","DR CORE"].forEach(n=>flag.add(ci(n)));   // rated product may differ from the default series
+  (Array.isArray(x.unsure)?x.unsure:[]).forEach(f=>(UNSURE[f]||[]).forEach(n=>{if(ci(n)>=0)flag.add(ci(n))}));
+  if(!mark)flag.add(MK);
+  return{inc:!x.crossed_out,v,fromDef,flag};
+}
+
+/* ---------- grid ---------- */
+function renderGrid(){
+  const size=COLS.map((c,j)=>Math.max(4,Math.min(30,...state.rows.map(r=>r.v[j].length+1))));
+  $("grid").tHead.innerHTML="<tr><th class='pin'><span>USE</span></th>"+COLS.map(c=>`<th><span>${esc(c)}</span></th>`).join("")+"</tr>";
+  $("grid").tBodies[0].innerHTML=state.rows.map((r,i)=>{
+    return`<tr class="${r.inc?"":"skip"}"><td class="pin"><label><input type="checkbox" data-inc="${i}" ${r.inc?"checked":""} aria-label="Include row ${i+1}"> ${esc(r.v[MK])||"new"}</label> <button data-del="${i}" title="Delete row" style="padding:0 5px;border:0;background:transparent">×</button></td>`+
+      r.v.map((val,j)=>`<td class="${r.flag.has(j)?"q":r.fromDef.has(j)?"d":""}"><input type="text" size="${size[j]}" data-r="${i}" data-c="${j}" value="${esc(val)}" aria-label="${esc(COLS[j])}"></td>`).join("")+"</tr>"}).join("");
+  const inc=state.rows.filter(r=>r.inc).length;
+  $("count").textContent=state.rows.length?`${inc} of ${state.rows.length} rows in the export`:"no rows yet";
+  $("sampleNote").hidden=!state.isSample;
+}
+$("grid").addEventListener("input",e=>{const t=e.target;if(t.dataset.c){const r=state.rows[+t.dataset.r];r.v[+t.dataset.c]=t.value;r.flag.delete(+t.dataset.c);t.parentNode.className=""}});
+$("grid").addEventListener("change",e=>{const t=e.target;if(t.dataset.inc){state.rows[+t.dataset.inc].inc=t.checked;renderGrid()}});
+$("grid").addEventListener("click",e=>{const t=e.target;if(t.dataset.del){state.rows.splice(+t.dataset.del,1);renderGrid()}});
+$("add").onclick=()=>{state.rows.push(buildRow({}));renderGrid()};
+$("clear").onclick=()=>{state.rows=[];state.tables=[];state.isSample=false;renderGrid();renderMap()};
+
+/* ---------- export ---------- */
+function table(){const par=$("optParen").checked;return state.rows.filter(r=>r.inc).map(r=>r.v.map((c,j)=>par&&PAREN.has(j)&&c&&!/^\(.*\)$/.test(c)?"("+c+")":c))}
+const csvCell=s=>/[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+function say2(t,err){$("status2").textContent=t;$("status2").className="status"+(err?" err":"")}
+function showText(t){const f=$("fallback");f.hidden=false;f.value=t;f.focus();f.select()}
+$("save").onclick=async()=>{
+  const t=table();if(!t.length)return say2("There are no rows to save.",true);
+  const [ext,sep,wide]=$("fmt").value.split("|"),q=c=>'"'+c.replace(/"/g,'""')+'"';
+  // the 61-column variant leaves blank slots where the import was seen to skip a position (after DR FINISH, and three after HEAD DETAIL)
+  const pad=(r,f)=>wide?[...r.slice(0,24),f(1),...r.slice(24,41),f(2),f(3),f(4),...r.slice(41)]:r;
+  const body=t.map(r=>pad(r,()=>"").map(c=>sep===","?q(c):c.replace(/[\t\n]/g," ")).join(sep));
+  if($("optHead").checked)body.unshift(pad(COLS,i=>"SPARE "+i).join(sep));
+  const csv=body.join("\r\n")+"\r\n";
+  let name=($("fname").value.trim()||"takeoff").replace(/\.(csv|txt)$/i,"")+"."+ext;
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/plain"}));a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+  say2("Saved "+name+". Look in your Downloads folder.");
+};
+$("copy").onclick=async()=>{
+  const tsv=($("optHead").checked?[COLS]:[]).concat(table()).map(r=>r.map(c=>c.replace(/[\t\n]/g," ")).join("\t")).join("\n");
+  try{await navigator.clipboard.writeText(tsv);say2("Copied, tab-separated. Paste into Excel or a grid.")}
+  catch(e){showText(tsv);say2("Copy was blocked. The rows are selected below: press Ctrl+C.",true)}
+};
+
+/* ---------- sources: photos and PDF pages ---------- */
+function rotated(base,rot,maxSide){
+  const s=Math.min(1,maxSide/Math.max(base.width,base.height)),w=Math.round(base.width*s),h=Math.round(base.height*s),q=rot%180!==0;
+  const c=document.createElement("canvas");c.width=q?h:w;c.height=q?w:h;const g=c.getContext("2d");
+  g.fillStyle="#fff";g.fillRect(0,0,c.width,c.height);g.translate(c.width/2,c.height/2);g.rotate(rot*Math.PI/180);g.drawImage(base,-w/2,-h/2,w,h);return c;
+}
+function toCanvas(bmp,maxSide){const s=Math.min(1,maxSide/Math.max(bmp.width,bmp.height)),c=document.createElement("canvas");c.width=Math.round(bmp.width*s);c.height=Math.round(bmp.height*s);c.getContext("2d").drawImage(bmp,0,0,c.width,c.height);return c}
+async function pdfPageCanvas(page,maxSide){const v1=page.getViewport({scale:1}),vp=page.getViewport({scale:maxSide/Math.max(v1.width,v1.height)}),c=document.createElement("canvas");c.width=Math.ceil(vp.width);c.height=Math.ceil(vp.height);const g=c.getContext("2d");g.fillStyle="#fff";g.fillRect(0,0,c.width,c.height);await page.render({canvasContext:g,viewport:vp}).promise;return c}
+function say(t,err){$("status").textContent=t;$("status").className="status"+(err?" err":"")}
+async function addFiles(files){
+  for(const f of files){
+    try{
+      if(f.type==="application/pdf"||/\.pdf$/i.test(f.name)){
+        if(!window.pdfjsLib){say("The PDF reader did not load. Photos still work; reload to try PDFs again.",true);continue}
+        const pdf=await pdfjsLib.getDocument({data:await f.arrayBuffer()}).promise,n=Math.min(pdf.numPages,60);
+        for(let p=1;p<=n;p++){const page=await pdf.getPage(p);
+          state.srcs.push({name:`${f.name} p.${p}`,rot:0,inc:n<=2,thumb:await pdfPageCanvas(page,420),full:()=>pdfPageCanvas(page,4200),items:()=>pdfItems(page),
+});
+          renderSrcs()}
+        if(pdf.numPages>2)say(`${f.name} has ${pdf.numPages} sheets. Tick the ones with the door schedule.`);
+      }else{
+        const bmp=await createImageBitmap(f,{imageOrientation:"from-image"});
+        state.srcs.push({name:f.name||"pasted image",rot:0,inc:true,thumb:toCanvas(bmp,420),full:async()=>toCanvas(await createImageBitmap(f,{imageOrientation:"from-image"}),4600),items:async()=>null});
+        bmp.close&&bmp.close();renderSrcs();
+      }
+    }catch(e){say(`Could not open ${f.name}. Use a PDF, JPEG or PNG (iPhone HEIC photos need converting first).`,true)}
+  }
+}
+function renderSrcs(){
+  const box=$("srcs");box.innerHTML="";
+  state.srcs.forEach((s,i)=>{
+    const d=document.createElement("div");d.className="src"+(s.inc?"":" off");
+    d.append(rotated(s.thumb,s.rot,300));
+    d.insertAdjacentHTML("beforeend",`<div class="nm" title="${esc(s.name)}">${esc(s.name)}</div><div class="row"><label><input type="checkbox" data-i="${i}" ${s.inc?"checked":""}> Read</label><span><button data-rot="${i}" title="Rotate a quarter turn">Rotate</button> <button data-rm="${i}" title="Remove">×</button></span></div>`);
+    box.append(d)});
+}
+$("srcs").addEventListener("click",e=>{const t=e.target;if(t.dataset.rot){const s=state.srcs[+t.dataset.rot];s.rot=(s.rot+90)%360;renderSrcs()}else if(t.dataset.rm){state.srcs.splice(+t.dataset.rm,1);renderSrcs()}});
+$("srcs").addEventListener("change",e=>{const t=e.target;if(t.dataset.i){state.srcs[+t.dataset.i].inc=t.checked;renderSrcs()}});
+const drop=$("drop");
+drop.onclick=()=>$("file").click();drop.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();$("file").click()}};
+$("file").onchange=e=>{addFiles([...e.target.files]);e.target.value=""};
+["dragenter","dragover"].forEach(v=>drop.addEventListener(v,e=>{e.preventDefault();drop.classList.add("over")}));
+["dragleave","drop"].forEach(v=>drop.addEventListener(v,e=>{e.preventDefault();drop.classList.remove("over")}));
+drop.addEventListener("drop",e=>{const fs=[...e.dataTransfer.files];if(fs.length)addFiles(fs);else addText(e.dataTransfer.getData("text/plain"))});
+$("addText").onclick=()=>{if(!$("pasteBox").value.trim())return say("Paste some schedule lines into the box first.",true);addText($("pasteBox").value);$("pasteBox").value=""};
+document.addEventListener("paste",e=>{const fs=[...(e.clipboardData?.files||[])];if(fs.length)return addFiles(fs);if(/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName))return;const t=e.clipboardData?.getData("text/plain");if(t&&t.trim()){e.preventDefault();addText(t)}});
+
+/* ---------- reading engine: text positions -> table -> openings (runs entirely in the browser) ---------- */
+const norm=s=>String(s||"").replace(/[”“″]/g,'"').replace(/[’‘′`]/g,"'").replace(/''/g,'"').replace(/\s+/g," ").trim();
+const MARK=/^[A-Z]{0,3}[-.]?\d[A-Z0-9.\-\/]{0,9}$/i, DIMRE=/\d\s*['"]|\d\s*["']?\s*[xX×]\s*\(?\d|^\d-\d{1,2}$/, SIZERE=/\d\s*["']?\s*[xX×]\s*\(?\d/;
+const ROLES={"":"ignore",mark:"Door mark",from_room:"Room from / location",to_room:"Room to",size:"Size (W x H)",width:"Width",height:"Height",thickness:"Thickness",door_type:"Door type",door_material:"Door material",door_finish:"Door finish",frame_type:"Frame type",frame_material:"Frame material",frame_finish:"Frame finish",head:"Head detail",jamb:"Jamb detail",sill:"Sill / saddle detail",fire_rating:"Fire rating",hardware_set:"Hardware set",comments:"Comments"};
+let roleMem={};try{roleMem=JSON.parse(localStorage.getItem("s2t-roles")||"{}")}catch(e){}
+
+async function pdfItems(page){
+  const vp=page.getViewport({scale:1}),tc=await page.getTextContent(),raw=[],cnt=[0,0,0,0];
+  for(const it of tc.items){if(!it.str||!it.str.trim())continue;const t=pdfjsLib.Util.transform(vp.transform,it.transform),q=((Math.round(Math.atan2(t[1],t[0])/(Math.PI/2))%4)+4)%4;
+    cnt[q]+=it.str.length;raw.push({q,x:t[4],y:t[5],w:it.width,h:Math.hypot(t[2],t[3])||it.height||8,s:it.str})}
+  const q=cnt.indexOf(Math.max(...cnt));
+  return raw.filter(r=>r.q===q).map(r=>{let x=r.x,y=r.y;for(let k=0;k<q;k++)[x,y]=[y,-x];return{x,w:r.w,h:r.h,yc:y-r.h*.35,s:r.s,c:100}});
+}
+let ocrWorker=null,ocrProgress=()=>{};
+async function ocrItems(canvas){
+  if(!window.Tesseract)throw{msg:"The OCR engine did not load, so photos and scans cannot be read. Check the internet connection and reload. PDFs with real text still work."};
+  if(!ocrWorker){ocrWorker=await Tesseract.createWorker("eng",1,Object.assign({logger:m=>{if(m.status==="recognizing text")ocrProgress(m.progress)}},window.S2T_OCR_OPTS||{}));
+    await ocrWorker.setParameters({tessedit_pageseg_mode:"11",preserve_interword_spaces:"1"})}
+  const{data}=await ocrWorker.recognize(canvas);
+  const items=(data.words||[]).filter(w=>w.text&&w.text.trim()&&w.confidence>15).map(w=>({x:w.bbox.x0,w:w.bbox.x1-w.bbox.x0,h:w.bbox.y1-w.bbox.y0,yc:(w.bbox.y0+w.bbox.y1)/2,s:w.text,c:w.confidence}));
+  // straighten a slightly tilted photo so each schedule row lands on one line
+  const hs=items.map(i=>i.h).sort((a,b)=>a-b),H=hs[hs.length>>1]||20;let best=0,bs=-1;
+  for(let a=-4;a<=4;a+=.2){const t=Math.tan(a*Math.PI/180),m=new Map();for(const i of items){const k=Math.round((i.yc-(i.x+i.w/2)*t)/(H*.5));m.set(k,(m.get(k)||0)+1)}let s=0;m.forEach(v=>s+=v*v);if(s>bs){bs=s;best=t}}
+  items.forEach(i=>i.yc-=(i.x+i.w/2)*best);return items;
+}
+function guessRoles(cols){
+  const used={},X=(k,fr,dr)=>fr?"frame_"+k:dr?"door_"+k:used["door_"+k]?"frame_"+k:"door_"+k;
+  cols.forEach((c,i)=>{
+    const h=c.head.toUpperCase(),vals=c.vals.filter(v=>v),fr=/\bFR\b|FRAME|\bFRM\b/.test(h),dr=/DOOR|\bDR\b/.test(h);let r="";
+    if(i===0)r="mark";
+    else if(roleMem[h]!==undefined&&h)r=roleMem[h];
+    else if(vals.length&&vals.filter(v=>SIZERE.test(v)).length/vals.length>.6)r="size";
+    else if(/HARDWARE|HDW|\bHW\b|H\.W\./.test(h))r="hardware_set";
+    else if(/RATING|LABEL|\bFIRE\b/.test(h))r="fire_rating";
+    else if(/COMMENT|REMARK|NOTE/.test(h))r="comments";
+    else if(/THICK|THK/.test(h))r="thickness";
+    else if(/\bHEAD\b/.test(h))r="head";else if(/JAMB/.test(h))r="jamb";else if(/SILL|SADDLE|THRESH/.test(h))r="sill";
+    else if(/\bFROM\b/.test(h))r="from_room";else if(/\bTO\b/.test(h))r="to_room";
+    else if(/ROOM|LOCATION/.test(h))r=used.from_room?"to_room":"from_room";
+    else if(/WIDTH/.test(h)&&!/HEIGHT/.test(h))r="width";else if(/HEIGHT|\bHG?T\b/.test(h))r="height";
+    else if(/SIZE/.test(h)&&!used.size)r="size";
+    else if(/TYPE|ELEV/.test(h))r=X("type",fr,dr);else if(/MAT/.test(h))r=X("material",fr,dr);else if(/FIN/.test(h))r=X("finish",fr,dr);
+    if(r&&used[r])r="";c.role=r;if(r)used[r]=1});
+}
+function parseOne(items,name){
+  items=(items||[]).filter(i=>i.s&&i.s.trim());if(items.length<8)return null;
+  const hs=items.map(i=>i.h).sort((a,b)=>a-b),H=hs[hs.length>>1]||8;
+  items.sort((a,b)=>a.yc-b.yc);const lines=[];
+  for(const it of items){const L=lines[lines.length-1];if(L&&Math.abs(it.yc-L.yc)<=H*.6){L.items.push(it);L.yc+=(it.yc-L.yc)/L.items.length}else lines.push({yc:it.yc,items:[it]})}
+  for(const L of lines){L.items.sort((a,b)=>a.x-b.x);L.g=[];for(const it of L.items){const g=L.g[L.g.length-1],gap=g?it.x-g.x1:0;
+      if(g&&gap<Math.max(it.h,H)*.45){g.s+=(gap<H*.12?"":" ")+it.s;g.x1=Math.max(g.x1,it.x+it.w)}else L.g.push({x:it.x,x1:it.x+it.w,s:it.s})}
+    L.g.forEach(g=>g.s=norm(g.s));L.door=L.g.length>=4&&MARK.test(L.g[0].s)&&L.g.some(g=>DIMRE.test(g.s))}
+  const first=lines.findIndex(L=>L.door),doors=lines.filter(L=>L.door);if(doors.length<2)return null;
+  const gaps=doors.slice(1).map((L,i)=>L.yc-doors[i].yc).sort((a,b)=>a-b),pitch=gaps[gaps.length>>1]||H*2;
+  const x0=Math.min(...doors.map(L=>L.items[0].x)),x1=Math.max(...doors.map(L=>Math.max(...L.items.map(i=>i.x+i.w))));
+  // columns: x ranges that (almost) every door row leaves blank are the gaps between columns
+  const u=H*.15,n=Math.ceil((x1-x0)/u)+1,cov=new Uint16Array(n);
+  for(const L of doors){const seen=new Uint8Array(n);for(const it of L.items){for(let b=Math.max(0,Math.floor((it.x-x0)/u));b<=Math.min(n-1,Math.floor((it.x+it.w-x0)/u));b++)seen[b]=1}for(let b=0;b<n;b++)cov[b]+=seen[b]}
+  const thr=Math.floor(doors.length*.08);let cols=[],cur=null;
+  for(let b=0;b<n;b++){if(cov[b]>thr){if(!cur){cur={a:x0+b*u,b:0};cols.push(cur)}cur.b=x0+(b+1)*u}else cur=null}
+  const hit=(it,c)=>it.x<c.b&&it.x+it.w>c.a;
+  for(const L of doors)for(const it of L.items)if(!cols.some(c=>hit(it,c))){cols.push({a:it.x,b:it.x+it.w});cols.sort((p,q)=>p.a-q.a);
+    for(let i=cols.length-1;i>0;i--)if(cols[i].a<cols[i-1].b){cols[i-1].b=Math.max(cols[i-1].b,cols[i].b);cols.splice(i,1)}}
+  cols.sort((p,q)=>p.a-q.a);
+  const colOf=xc=>{let bi=0,bd=1e18;cols.forEach((c,i)=>{const d=xc<c.a?c.a-xc:xc>c.b?xc-c.b:0;if(d<bd){bd=d;bi=i}});return bi};
+  // header text sitting above each column
+  let hl=-1;for(let i=first-1;i>=0;i--)if(lines[i].g.length>=4){hl=i;break}
+  cols.forEach(c=>c.h=[]);
+  if(hl>=0)for(let i=0;i<first;i++){const L=lines[i];if(L.yc<lines[hl].yc-pitch*5)continue;if(/SCHEDULE/i.test(L.g.map(g=>g.s).join(" "))&&L.g.length<4)continue;
+    if(i>hl&&L.g.length===1&&L.g[0].s.length>=12)continue;for(const g of L.g)cols[colOf((g.x+g.x1)/2)].h.push(g.s)}
+  // rows
+  const rows=[];let bld="",prev=null;
+  for(let i=Math.max(0,hl+1);i<lines.length;i++){const L=lines[i];
+    if(L.door){const r={cells:cols.map(()=>""),low:new Set(),bld,yc:L.yc};for(const it of L.items){const k=colOf(it.x+it.w/2);r.cells[k]=norm(r.cells[k]+" "+it.s);if(it.c<55)r.low.add(k)}rows.push(r);prev=r}
+    else if(prev&&L.yc-prev.yc<pitch*.75&&L.g.length<=3){for(const g of L.g){const k=colOf((g.x+g.x1)/2);if(k>0)prev.cells[k]=norm(prev.cells[k]+" "+g.s)}}
+    else if(L.g.length<=2&&L.g[0].x<x0+(x1-x0)*.2&&L.g.map(g=>g.s).join(" ").length>=6&&!/^NOTE/i.test(L.g[0].s)&&(i<first||L.yc<doors[doors.length-1].yc)){bld=L.g.map(g=>g.s).join(" ").replace(/[_:]+$/,"");prev=null}
+    else prev=null}
+  const out=cols.map((c,i)=>({head:norm(c.h.join(" ")),vals:rows.map(r=>r.cells[i]),role:""}));guessRoles(out);
+  return{name,cols:out,rows};
+}
+/* ---------- find every schedule on the sheet, even with other drawing text beside it or two schedules side by side ---------- */
+function parseItems(items,name){
+  items=(items||[]).filter(i=>i.s&&i.s.trim());if(items.length<20)return[];
+  const hs=items.map(i=>i.h).sort((a,b)=>a-b),H=hs[hs.length>>1]||8,sorted=items.slice().sort((a,b)=>a.yc-b.yc),lines=[],cand=[];
+  for(const it of sorted){const L=lines[lines.length-1];if(L&&Math.abs(it.yc-L.yc)<=H*.6){L.items.push(it);L.yc+=(it.yc-L.yc)/L.items.length}else lines.push({yc:it.yc,items:[it]})}
+  for(const L of lines){L.items.sort((a,b)=>a.x-b.x);const g=[];for(const it of L.items){const p=g[g.length-1],gap=p?it.x-p.x1:0;
+      if(p&&gap<Math.max(it.h,H)*.45){p.s+=(gap<H*.12?"":" ")+it.s;p.x1=Math.max(p.x1,it.x+it.w)}else g.push({x:it.x,x1:it.x+it.w,s:it.s})}
+    g.forEach(q=>q.s=norm(q.s));let dimBefore=false;
+    g.forEach((q,i)=>{const d=DIMRE.test(q.s);if(!d&&MARK.test(q.s)&&g.slice(i+1,i+9).some(z=>DIMRE.test(z.s)))cand.push({x:q.x,s:q.s,L,after:dimBefore});if(d)dimBefore=true})}
+  if(cand.length<2)return[];
+  cand.sort((a,b)=>a.x-b.x);const cl=[];
+  for(const c of cand){const k=cl[cl.length-1];if(k&&c.x-k.last<=H*1.5){k.m.push(c);k.last=c.x}else cl.push({m:[c],last:c.x,x:c.x})}
+  cl.forEach(k=>{k.n=new Set(k.m.map(c=>c.L)).size;k.distinct=new Set(k.m.map(c=>c.s)).size/k.m.length;k.after=k.m.filter(c=>c.after).length/k.m.length});
+  const max=Math.max(...cl.map(k=>k.n)),prim=cl.find(k=>k.n>=max*.8&&k.n>=2);if(!prim)return[];
+  const picks=cl.filter(k=>k===prim||(k.x>prim.x&&k.n>=3&&k.n>=max*.3&&k.distinct>=.9&&k.after>=.8)).sort((a,b)=>a.x-b.x),out=[];
+  picks.forEach((k,i)=>{const a=k.x-H*.5,b=picks[i+1]?picks[i+1].x-H*.5:Infinity,nm=picks.length>1?`${name}, schedule ${i+1}`:name;
+    let t=parseOne(items.filter(it=>it.x>=a&&it.x<b),nm);
+    if(!t||t.rows.length<k.n*.7){const tt=parseText(lines.map(L=>L.items.filter(it=>it.x>=a&&it.x<b).map(it=>it.s).join(" ")).filter(s=>s.trim()).join("\n"),nm);if(tt&&tt.rows.length>(t?t.rows.length:0))t=tt}
+    if(t)out.push(t)});
+  return out;
+}
+/* ---------- pasted text: rows copied out of a PDF or spreadsheet ---------- */
+const T_RATE=/\b\d(?:\s*-\s*\d\/\d)?\s*(?:HRS?|HOURS?)\b\.?|\b\d{2,3}\s*MIN\b\.?|\b\d\/\d\s*HR\b\.?/i,T_HW=/\b(?:HS|HW|HDW|HDWE|SET)\s?[-#]?\s?\d+[A-Z]?\b/i,T_THK=/^[12][ -]\d\/\d\s*"?/;
+const T_SIZE=/(?:\(\s*2\s*\)|PR\.?|PAIR)?\s*\d+(?:'\s*-?\s*\d*)?\s*"?\s*[xX×]\s*\d+(?:'\s*-?\s*\d*)?\s*"?/;
+function parseText(text,name){
+  const lines=String(text).replace(/\r/g,"").replace(/\u00a0/g," ").split("\n").filter(l=>l.trim());
+  const isDoor=l=>{const t=norm(l);return MARK.test(t.split(" ")[0])&&T_SIZE.test(t)},doors=lines.filter(isDoor);if(!doors.length)return null;
+  const tabby=doors.filter(l=>l.split("\t").length>=4).length>=doors.length*.6,wide=!tabby&&doors.filter(l=>l.trim().split(/ {2,}/).length>=5).length>=doors.length*.6;
+  if(tabby||wide){
+    const sp=l=>(tabby?l.split("\t"):l.trim().split(/ {2,}/)).map(norm),n=Math.max(...doors.map(l=>sp(l).length)),rows=[];let head=[],bld="",seen=false;
+    for(const l of lines){const c=sp(l);if(isDoor(l)){while(c.length<n)c.push("");rows.push({cells:c,low:new Set(),bld});seen=true}
+      else{const f=c.filter(x=>x);if(!seen&&f.length>=4)head=c;else if(f.length<=2&&norm(l).length>=6&&!/^NOTE/i.test(norm(l)))bld=norm(l)}}
+    const cols=[...Array(n)].map((_,i)=>({head:head[i]||"",vals:rows.map(r=>r.cells[i]),role:""}));guessRoles(cols);return{name,cols,rows};
+  }
+  // single-spaced lines: work out each value from what it looks like and the order of the headings
+  const fi=lines.findIndex(isDoor),ht=lines.slice(0,fi).join(" ").toUpperCase(),hs=ht.slice(Math.max(0,ht.search(/THICK|THK/)));let seq=[];
+  hs.replace(/(DOOR|FRAME|\bFR\b|\bDR\b)?\s*(TYPE|MAT(?:ERIA)?'?L|FINISH|\bHEAD\b|JAMB|SILL|SADDLE|THRESHOLD|RATING|LABEL|GLAZING|GLASS|LOUVER)/g,(m,p,k)=>{
+    const b=/TYPE/.test(k)?"type":/MAT/.test(k)?"material":/FIN/.test(k)?"finish":"";let r=b?(/^F/.test(p||"")?"frame_":/^D/.test(p||"")?"door_":seq.includes("door_"+b)?"frame_":"door_")+b:/HEAD/.test(k)?"head":/JAMB/.test(k)?"jamb":/SILL|SADDLE|THRESH/.test(k)?"sill":/RATING|LABEL/.test(k)?"fire_rating":"";
+    if(r&&seq.includes(r))r="";seq.push(r);return m});
+  if(seq.filter(r=>r).length<3)seq=["door_type","door_material","door_finish","frame_type","frame_material","frame_finish","head","jamb","sill","fire_rating"];
+  const ri=seq.indexOf("fire_rating"),rows=[];let bld="";
+  lines.forEach((raw,li)=>{const l=norm(raw);
+    if(!isDoor(raw)){if(l.length>=6&&lines[li+1]&&isDoor(lines[li+1])&&!/^NOTE|WIDTH|HEIGHT|THICK|TYPE|FINISH|HARDWARE|COMMENT|REMARK|JAMB|DOOR NO|MATERIAL/i.test(l))bld=l.replace(/[_:]+$/,"");return}
+    const sm=l.match(T_SIZE),mark=l.split(" ")[0],r={cells:Array(7+seq.length).fill(""),low:new Set(),bld,pre:l.slice(mark.length,sm.index).trim()};
+    let rest=l.slice(sm.index+sm[0].length).trim();r.cells[0]=mark;r.cells[3]=sm[0].trim();
+    const tm=rest.match(T_THK);if(tm){r.cells[4]=tm[0].trim();rest=rest.slice(tm[0].length).trim()}
+    const hm=rest.match(T_HW);let mid=rest;if(hm){mid=rest.slice(0,hm.index);r.cells[5+seq.length]=hm[0];r.cells[6+seq.length]=rest.slice(hm.index+hm[0].length).trim()}else r.low.add(5+seq.length);
+    let rate="";mid=mid.replace(T_RATE,m=>{rate=m;return" \u00a7 "});let tk=mid.split(" ").filter(Boolean);
+    if(!hm&&tk.length>seq.length){r.cells[6+seq.length]=tk.slice(seq.length).join(" ");tk=tk.slice(0,seq.length)}
+    if(tk.length===seq.length-1&&ri>=0&&!rate)tk.splice(ri,0,"");
+    if(tk.length!==seq.length)seq.forEach((_,i)=>r.low.add(5+i));
+    tk.slice(0,seq.length).forEach((t,i)=>r.cells[5+i]=t==="\u00a7"?rate:t);rows.push(r)});
+  const known=new Set(),K=s=>s.toUpperCase();
+  rows.forEach(r=>{let p=r.pre.match(/^(.+?)\s+(EXTERIOR|EXT\.?|OUTSIDE)$/i);if(p){r.cells[1]=p[1];r.cells[2]=p[2];known.add(K(p[1]))}else if(p=r.pre.match(/^(EXTERIOR|EXT\.?|OUTSIDE)\s+(.+)$/i)){r.cells[1]=p[1];r.cells[2]=p[2];known.add(K(p[2]))}});
+  for(let pass=0;pass<3;pass++)rows.forEach(r=>{if(r.cells[1]||!r.pre)return;const w=r.pre.split(" ");
+    for(const both of[true,false])for(let k=1;k<w.length;k++){const a=w.slice(0,k).join(" "),b=w.slice(k).join(" "),ka=known.has(K(a)),kb=known.has(K(b));
+      if(both?ka&&kb:pass>0&&(ka||kb)){r.cells[1]=a;r.cells[2]=b;known.add(K(a));known.add(K(b));return}}});
+  rows.forEach(r=>{if(!r.cells[1]&&r.pre){r.cells[1]=r.pre;r.low.add(1);r.low.add(2)}});
+  const roles=["mark","from_room","to_room","size","thickness",...seq,"hardware_set","comments"];
+  return{name,cols:roles.map((role,i)=>({head:role?ROLES[role]:"(not used)",vals:rows.map(r=>r.cells[i]),role})),rows};
+}
+function addText(text){
+  if(!text||!text.trim())return;const ls=text.replace(/\r/g,"").split("\n").filter(l=>l.trim()),c=document.createElement("canvas");c.width=420;c.height=300;
+  const g=c.getContext("2d");g.fillStyle="#fff";g.fillRect(0,0,420,300);g.fillStyle="#222";g.font="11px monospace";ls.slice(0,22).forEach((l,i)=>g.fillText(l.replace(/\t/g,"  ").slice(0,64),8,16+i*13));
+  state.srcs.push({name:`Pasted text, ${ls.length} lines`,rot:0,inc:true,thumb:c,full:async()=>c,items:async()=>null,text});renderSrcs();
+  say(`Added ${ls.length} pasted lines. Press Read schedule.`);
+}
+function dim(s){s=norm(s);let m=s.match(/(\d+)\s*'\s*-?\s*(\d+(?:\.\d+)?)?/);if(m)return m[1]*12+(+m[2]||0);m=s.match(/^(\d+)\s*-\s*(\d{1,2})$/);if(m)return m[1]*12+ +m[2];m=s.match(/(\d+(?:\.\d+)?)/);return m?+m[1]:0}
+function toRecord(t,row){
+  const g=r=>{const i=t.cols.findIndex(c=>c.role===r);return i<0?"":row.cells[i]||""},unsure=[];
+  let leaves=1,w=0,h=0;const s=g("size");
+  if(s){const m=s.match(/^(\(?\s*2\s*\)|PR\.?|PAIR)?\s*(.*?)\s*[xX×]\s*(.*?)(?:\s*[xX×].*)?$/i);if(m){if(m[1])leaves=2;w=dim(m[2]);h=dim(m[3])}}
+  else{w=dim(g("width"));h=dim(g("height"))}
+  if(leaves===1&&/\bPR\b|\bPAIR\b/i.test(row.cells.join(" ")))leaves=2,w=w>=64?w/2:w;
+  else if(leaves===1&&w>=64){leaves=2;w/=2;unsure.push("leaves")}
+  if(!w||!h||w>60||h<60||h>144)unsure.push("leaf_width_in","height_in");
+  row.low.forEach(k=>{const r=t.cols[k].role;if(r==="size"||r==="width"||r==="height")unsure.push("leaf_width_in","height_in");else if(r)unsure.push(r)});
+  const rec={building:row.bld,leaves,leaf_width_in:w,height_in:h,unsure};
+  for(const r of["mark","from_room","to_room","thickness","door_type","door_material","door_finish","frame_type","frame_material","frame_finish","head","jamb","sill","fire_rating","hardware_set","comments"])rec[r]=g(r);
+  return rec;
+}
+function rebuild(keep){
+  const seen=new Set(keep.map(r=>r.v[MK])),rows=[];
+  for(const t of state.tables)for(const r of t.rows){const rec=toRecord(t,r),m=clean(rec.mark);if(m&&seen.has(m))continue;seen.add(m);rows.push(buildRow(rec))}
+  state.rows=keep.concat(rows);state.isSample=false;renderGrid();return rows;
+}
+function renderMap(){
+  $("mapwrap").hidden=!state.tables.length;
+  $("map").innerHTML=state.tables.map((t,ti)=>`<h3>${esc(t.name)}: ${t.rows.length} rows</h3><table><tr><th>Heading on the drawing</th><th>First row</th><th>Second row</th><th>Goes to</th></tr>`+
+    t.cols.map((c,ci)=>`<tr><td title="${esc(c.head)}">${esc(c.head)||"(no heading found)"}</td><td>${esc(c.vals[0])}</td><td>${esc(c.vals[1])}</td><td><select data-t="${ti}" data-c="${ci}" aria-label="Column ${ci+1} goes to">${Object.keys(ROLES).map(k=>`<option value="${k}" ${k===c.role?"selected":""}>${ROLES[k]}</option>`).join("")}</select></td></tr>`).join("")+"</table>").join("");
+}
+$("map").addEventListener("change",e=>{const s=e.target;if(!s.dataset.t)return;const t=state.tables[+s.dataset.t],c=t.cols[+s.dataset.c];
+  if(s.value)t.cols.forEach(o=>{if(o!==c&&o.role===s.value)o.role=""});c.role=s.value;
+  if(c.head){roleMem[c.head.toUpperCase()]=s.value;try{localStorage.setItem("s2t-roles",JSON.stringify(roleMem))}catch(e){}}
+  rebuild(state.keep||[]);renderMap()});
+$("go").onclick=async()=>{
+  const list=state.srcs.filter(s=>s.inc);
+  if(!list.length)return say("Add a PDF or photo first and tick at least one sheet.",true);
+  stopped=false;$("go").disabled=true;$("stop").hidden=false;const tables=[];let failed="",empty=[];
+  for(let i=0;i<list.length&&!stopped;i++){
+    const s=list[i],tag=`${s.name} (${i+1} of ${list.length})`;
+    try{
+      say(`Reading ${tag}…`);await new Promise(r=>setTimeout(r,30));
+      let items=s.text?null:await s.items(),t=[];
+      if(s.text){const p=parseText(s.text,s.name);if(p)t=[p]}
+      else if(items&&items.length>=40)t=parseItems(items,s.name);
+      if(!t.length&&!s.text&&!(items&&items.length>=400)){
+        say(`Running OCR on ${tag}. The first run downloads the OCR engine, and a full sheet can take a minute or two.`);
+        ocrProgress=p=>say(`Running OCR on ${tag}… ${Math.round(p*100)}%`);
+        t=parseItems(await ocrItems(rotated(await s.full(),s.rot,4600)),s.name)}
+      if(t.length)tables.push(...t);else empty.push(s.name);
+    }catch(e){failed=e&&e.msg||`Something went wrong reading ${s.name}.`;if(e&&!e.msg)console.error(e)}
+  }
+  $("go").disabled=false;$("stop").hidden=true;
+  if(tables.length){
+    const keep=$("optAppend").checked&&!state.isSample?state.rows:[];state.keep=keep;
+    state.tables=tables;const rows=rebuild(keep);renderMap();$("mapwrap").open=true;
+    const fl=rows.filter(r=>r.flag.size).length;
+    say(`Read ${rows.length} openings.`+(fl?` ${fl} rows have yellow cells to check.`:"")+" Check the columns list under Openings, then compare the rows with the drawing. Crossed-out rows are not detected: untick them yourself."+(empty.length?` No schedule found on: ${empty.join(", ")}.`:"")+(failed?" "+failed:""),!!failed);
+  }else say(failed||(stopped?"Stopped.":"No door schedule rows were found. Check that the right sheet is ticked and upright (use Rotate), and for photos use a sharper, straighter, closer shot."),true);
+};
+$("stop").onclick=()=>{stopped=true;say("Stopping after this sheet…")};
+
+/* ---------- example rows from the Well 44/44A schedule ---------- */
+const E="ELECTRONIC ACCESS CONTROLS",P="EXIT/PANIC HARDWARE",B2="WELL NO.44/44A",B3="WELL NO.44/44A BOOSTER";
+[["2-001A",B2,"GAC BASEMENT","EXTERIOR",2,"2","F2",1,"","HS-1A",""],["2-001B",B2,"GAC BASEMENT","EXTERIOR",2,"2","F2",1,"","HS-1",E],["2-101A",B2,"GAC BASEMENT","ELECTRICAL ROOM",1,"3","F1",2,"","HS-3",""],["2-101B",B2,"ELECTRICAL ROOM","EXTERIOR",2,"2","F2",1,"","HS-1",E+", "+P],["2-101C",B2,"ELECTRICAL ROOM","EXTERIOR",1,"1","F1",1,"","HS-2",E+", "+P],["2-101D",B2,"ELECTRICAL ROOM","EXTERIOR",2,"2","F2",1,"","HS-1A",""],["2-102A",B2,"SODIUM HYPOCHLORITE RM","EXTERIOR",2,"2","F2",1,"","HS-1",E+", "+P],["2-102B",B2,"SODIUM HYPOCHLORITE RM","ANALYZER RM",1,"3","F1",2,"1-1/2 HR","HS-3",P],["2-103",B2,"GAC BASEMENT","ANALYZER RM",1,"3","F1",2,"1-1/2 HR","HS-3",""],["2-104A",B2,"CLEARWELL PUMP RM","EXTERIOR",2,"2","F2",1,"","HS-1",E],["2-104B",B2,"GAC BASEMENT","CLEARWELL PUMP RM",1,"3","F1",2,"","HS-3",""],["2-104C",B2,"GAC BASEMENT","CLEARWELL PUMP RM",1,"3","F1",2,"","HS-3",""],["3-101A",B3,"PUMP ROOM","EXTERIOR",1,"1","F1",1,"","HS-2",E],["3-101B",B3,"PUMP ROOM","EXTERIOR",2,"2","F2",1,"","HS-1",E],["3-101C",B3,"PUMP ROOM","EXTERIOR",2,"2","F2",1,"","HS-1",E],["3-101D",B3,"PUMP ROOM","EXTERIOR",2,"2","F2",1,"","HS-1",E],["3-102",B3,"RESTROOM","PUMP ROOM",1,"1","F1",2,"","HS-3",""]]
+.forEach(([mark,building,from_room,to_room,leaves,door_type,frame_type,k,fire_rating,hardware_set,comments])=>state.rows.push(buildRow({mark,building,from_room,to_room,leaves,leaf_width_in:36,height_in:84,thickness:"1 3/4",door_type,frame_type,head:"H"+k,jamb:"J"+k,sill:"S"+k,fire_rating,hardware_set,comments})));
+renderGrid();
+
+</script>
+</body>
+</html>
