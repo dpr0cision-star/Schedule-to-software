@@ -1,0 +1,798 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Schedule to Takeoff</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one working column, three numbered stages (sources, job defaults, openings grid); the grid is the only wide thing and scrolls inside itself. */
+:root{
+  --bg:#f2eedf; --panel:#fbf9f0; --ink:#17251c; --muted:#5d6a5f; --line:#d2ccb6;
+  --accent:#1f4d33; --accent-ink:#fbf9f0; --fill:#d6ecc4; --fill-ink:#1b3a10;
+  --warn:#f6dc8f; --warn-ink:#4f3800; --red:#a3261d; --head:#e6e1cd;
+  --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0f1712; --panel:#17221a; --ink:#e9e6d6; --muted:#9aa696; --line:#2c3b30;
+  --accent:#8fca9f; --accent-ink:#0f1712; --fill:#23401c; --fill-ink:#cfeab8;
+  --warn:#4d3b0c; --warn-ink:#f6dc9a; --red:#f08a82; --head:#1e2b22; color-scheme:dark } }
+:root[data-theme="dark"]{
+  --bg:#0f1712; --panel:#17221a; --ink:#e9e6d6; --muted:#9aa696; --line:#2c3b30;
+  --accent:#8fca9f; --accent-ink:#0f1712; --fill:#23401c; --fill-ink:#cfeab8;
+  --warn:#4d3b0c; --warn-ink:#f6dc9a; --red:#f08a82; --head:#1e2b22; color-scheme:dark }
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45}
+.wrap{max-width:1180px;margin:0 auto;padding-inline:16px;padding-block:24px 48px;display:flex;flex-direction:column;gap:20px}
+h1{font-family:var(--display);font-weight:600;font-size:2.1rem;line-height:1.05;margin:0;letter-spacing:.01em;text-wrap:balance}
+.lede{color:var(--muted);margin:6px 0 0;max-width:65ch}
+section{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+h2{font-family:var(--display);font-weight:600;font-size:1.3rem;margin:0;display:flex;gap:10px;align-items:baseline;letter-spacing:.02em}
+h2 .n{color:var(--accent);font-variant-numeric:tabular-nums}
+.hint{color:var(--muted);font-size:.87rem;margin:0;max-width:75ch}
+button,.btn{font:inherit;font-weight:500;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:7px 12px;border-radius:3px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button:disabled{opacity:.5;cursor:not-allowed}
+button:focus-visible,input:focus-visible,.drop:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.drop{border:1.5px dashed var(--line);border-radius:4px;padding:22px 16px;text-align:center;cursor:pointer;color:var(--muted)}
+.drop.over{border-color:var(--accent);color:var(--ink)}
+.drop b{color:var(--ink)}
+.srcs{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.src{border:1px solid var(--line);border-radius:3px;padding:8px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.src.off{opacity:.55}
+.src canvas{width:100%;height:110px;object-fit:contain;background:var(--head)}
+.src .nm{font-size:.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.src .row{gap:4px;justify-content:space-between}
+.src button{padding:2px 7px;font-size:.8rem}
+.src label{font-size:.8rem;display:flex;gap:4px;align-items:center}
+.defs{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px 10px}
+.defs label,.fld{display:flex;flex-direction:column;gap:3px;font-family:var(--display);font-size:.82rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.defs input,.fld input{font:500 .85rem var(--mono);padding:6px 7px;border:1px solid var(--line);border-radius:3px;background:var(--fill);color:var(--fill-ink);min-width:0;width:100%}
+details summary{cursor:pointer;font-weight:500}
+details[open] summary{margin-bottom:10px}
+.status{font-size:.9rem;color:var(--muted);min-height:1.4em}
+.status.err{color:var(--red)}
+.gridbox{overflow-x:auto;border:1px solid var(--line);border-radius:3px;max-height:70vh;overflow-y:auto}
+table{border-collapse:separate;border-spacing:0;font-family:var(--mono);font-size:.8rem;font-variant-numeric:tabular-nums}
+th,td{border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:0;background:var(--panel)}
+thead th{position:sticky;top:0;z-index:2;background:var(--head);vertical-align:bottom;padding:6px 2px}
+thead th span{writing-mode:vertical-rl;transform:rotate(180deg);font:500 .78rem var(--display);letter-spacing:.06em;white-space:nowrap;color:var(--ink)}
+th.pin,td.pin{position:sticky;left:0;z-index:1;background:var(--head);padding:2px 6px;white-space:nowrap;text-align:left;font-weight:500}
+thead th.pin{z-index:3}
+td input[type=text]{font:inherit;border:0;background:transparent;color:inherit;padding:4px 5px;box-sizing:content-box}
+td.d{background:var(--fill);color:var(--fill-ink)}
+td.q{background:var(--warn);color:var(--warn-ink)}
+tr.skip td:not(.pin){opacity:.4;text-decoration:line-through}
+.key{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.8rem;color:var(--muted)}
+.key i{display:inline-block;width:12px;height:12px;border:1px solid var(--line);vertical-align:-2px;margin-right:4px}
+.banner{background:var(--warn);color:var(--warn-ink);padding:8px 10px;border-radius:3px;font-size:.87rem}
+select{font:inherit;padding:5px;border:1px solid var(--line);border-radius:3px;background:var(--panel);color:var(--ink)}
+.mapbox{overflow-x:auto}
+.mapbox table{font-size:.78rem}
+.mapbox td,.mapbox th{padding:3px 6px;text-align:left;font-weight:400;white-space:nowrap;max-width:26ch;overflow:hidden;text-overflow:ellipsis}
+.mapbox th{background:var(--head);font-family:var(--body)}
+.mapbox h3{font:600 .85rem var(--body);margin:10px 0 4px}
+textarea{width:100%;height:120px;font:.75rem var(--mono);background:var(--panel);color:var(--ink);border:1px solid var(--line)}
+@media (prefers-reduced-motion:no-preference){button{transition:border-color .12s}}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Schedule to Takeoff</h1>
+    <p class="lede">Drop in a door schedule as a PDF or photo. The page reads each opening right in your browser, with no account and no per-use charge. You check the rows, and it saves a .txt file laid out for the e-mullions Import template.</p>
+  </header>
+
+  <section>
+    <h2><span class="n">1</span> Add the door schedule</h2>
+    <div class="drop" id="drop" tabindex="0" role="button" aria-label="Choose files"><b>Drop PDFs, photos or copied text here</b>, or click to choose. You can also paste a screenshot or copied schedule lines anywhere on the page.</div>
+    <div class="row" style="align-items:stretch"><textarea id="pasteBox" style="flex:1;min-width:220px;height:74px" placeholder="Or paste schedule lines here. Copy the rows from the PDF (include the heading row if you can), one opening per line."></textarea><button id="addText">Add pasted lines</button></div>
+    <input type="file" id="file" accept="application/pdf,image/*" multiple hidden>
+    <div class="srcs" id="srcs"></div>
+    <p class="hint" id="srchint">Tick only the sheets that hold the schedule. PDFs exported from the drawing software read best, because the text is already in the file. Photos and scans are read by OCR, which is slower and makes more mistakes: turn a sideways thumbnail upright with Rotate, and use a straight, close, sharp shot of just the schedule.</p>
+  </section>
+
+  <section>
+    <h2><span class="n">2</span> Job defaults</h2>
+    <p class="hint">These go on every opening, the same way you would fill them down in e-mullions. Leave a box empty to use what the schedule says (or nothing). They are remembered on this device.</p>
+    <details id="defwrap" open><summary>Manufacturer, series, finish</summary><div class="defs" id="defs"></div><p style="margin:10px 0 0"><button id="defClear">Clear all defaults</button> <span class="hint">for a job that is not FRP, so the schedule’s own materials and finishes come through</span></p></details>
+    <div class="row">
+      <label><input type="checkbox" id="optDet" checked> Fill head / jamb / sill detail columns</label>
+      <label><input type="checkbox" id="optSwap"> Swap outside / inside location</label>
+    </div>
+    <div class="row">
+      <button class="primary" id="go">Read schedule</button>
+      <button id="stop" hidden>Stop</button>
+      <label><input type="checkbox" id="optAppend"> Add to the rows already in the grid</label>
+    </div>
+    <div class="status" id="status" role="status"></div>
+  </section>
+
+  <section>
+    <h2><span class="n">3</span> Openings <span id="count" style="font:400 .9rem var(--body);color:var(--muted)"></span></h2>
+    <div class="banner" id="sampleNote">Example rows: Well Nos. 44/44A and the booster building, from the schedule you sent earlier. They are replaced when you read a new schedule.</div>
+    <details id="mapwrap" hidden><summary>Columns found on the schedule</summary><p class="hint">If a column landed in the wrong place, pick what it really is and the grid rebuilds. Rebuilding discards edits typed into the grid, so fix columns first. Your choices are remembered for schedules with the same headings.</p><div id="map" class="mapbox"></div></details>
+    <div class="gridbox"><table id="grid"><thead></thead><tbody></tbody></table></div>
+    <div class="key"><span><i style="background:var(--fill)"></i>from job defaults</span><span><i style="background:var(--warn)"></i>hard to read or needs a decision, check against the drawing</span><span>Untick a row to leave it out of the export.</span></div>
+    <div class="row">
+      <button id="add">Add row</button>
+      <button id="clear">Clear grid</button>
+      <span class="fld" style="flex-direction:row;align-items:center;gap:6px"><span>File name</span><input id="fname" value="takeoff" style="width:16ch;background:var(--panel);color:var(--ink)"></span>
+      <label>Format <select id="fmt"><option value="txt|	|61">.txt for e-mullions import (tab-delimited)</option><option value="csv|,">.csv to open in Excel</option></select></label>
+      <label><input type="checkbox" id="optHead" checked> Header row</label>
+      <label><input type="checkbox" id="optParen"> Put sizes in parentheses</label>
+      <button class="primary" id="save">Save file</button>
+      <button id="copy">Copy rows for pasting</button>
+    </div>
+    <div class="status" id="status2" role="status"></div>
+    <textarea id="fallback" hidden readonly aria-label="File text"></textarea>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<script>
+const COLS=["QTY","MARK","AREA","INSIDE LOCATION","OUTSIDE LOCATION","OPG MODE","FR WIDTH","FR HEIGHT","DOOR TYPE","DOOR THICK","ARCH DOOR TYPE","DR REMARKS","DR LIST AGENCY","DR FIRE RATING","FR TYPE","ARCH FR TYPE","FR LIST AGENCY","FR FIRE RATING","FR REMARKS","GEN NOTES","HEADING","DR STC","DR MATL/FACE","DR FINISH","FR CONSTR","FR MATL","FR FINISH","GLASS THICKNESS","BLDG","FLOOR","WALL TYPE","HAND","DR MFGR","DR SERIES","DR GAUGE","FR MFGR","FR SERIES","FR GAUGE","WALL THICK","JAMB DEPTH","HEAD DETAIL","JAMB DETAIL","SILL DETAIL","PLAN PAGE","LEFT BASE ANCHOR","RIGHT BASE ANCHOR","LEFT JAMB ANCHOR","RIGHT JAMB ANCHOR","HEAD ANCHOR","FR PREPPING","DR PREPPING","MFG DR TYPE ACT","MFG DR TYPE INACT","FR STC","INT/EXT","DR UNDERCUT","DR CORE"];
+const ci=n=>COLS.indexOf(n),MK=COLS.indexOf("MARK");
+const PAREN=new Set(["FR WIDTH","FR HEIGHT","DR UNDERCUT"].map(n=>COLS.indexOf(n)));
+const DEF=[["BLDG",""],["FR MFGR","SPE"],["FR TYPE","FRPF"],["FR SERIES","AF-150"],["FR GAUGE",""],["FR MATL","FRP"],["FR FINISH","BONE WHITE"],["JAMB DEPTH","7 3/8"],["DOOR TYPE","FRPD"],["DR MFGR","SPE"],["DR SERIES","AF-100"],["DR GAUGE",""],["DR CORE","PU"],["DR UNDERCUT","3/4"],["DR MATL/FACE","FRP"],["DR FINISH","BONE WHITE"],["FLOOR",""]];
+const $=id=>document.getElementById(id);
+const state={rows:[],srcs:[],tables:[],isSample:true,busy:false};
+let stopped=false;
+
+/* ---------- job defaults ---------- */
+let saved={};try{saved=JSON.parse(localStorage.getItem("s2t-defs")||"{}")}catch(e){}
+$("defs").innerHTML=DEF.map(([k,v],i)=>`<label>${k}<input type="text" id="def${i}" data-k="${k}" value="${esc(k in saved?saved[k]:v)}"></label>`).join("");
+$("defs").addEventListener("input",()=>{try{localStorage.setItem("s2t-defs",JSON.stringify(defs()))}catch(e){}});
+$("defClear").onclick=()=>{document.querySelectorAll("#defs input").forEach(i=>i.value="");try{localStorage.setItem("s2t-defs",JSON.stringify(defs()))}catch(e){}};
+function defs(){const o={};document.querySelectorAll("#defs input").forEach(i=>o[i.dataset.k]=i.value.trim());return o}
+function esc(s){return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+
+/* ---------- schedule row -> 59 takeoff columns ---------- */
+function ftIn(n){n=Number(n);if(!n||!isFinite(n))return"";const f=Math.floor(n/12);return f+"-"+(+(n-f*12).toFixed(3))}
+const clean=s=>{s=String(s??"").trim();return /^[-.–—]*$/.test(s)||/^n\/?a$/i.test(s)?"":s};
+const UNSURE={hand:["HAND"],mark:["MARK","ARCH MARK"],building:["BLDG"],from_room:["INSIDE LOCATION","OUTSIDE LOCATION"],to_room:["INSIDE LOCATION","OUTSIDE LOCATION"],leaves:["OPG MODE","FR WIDTH","DR WIDTH INACT"],leaf_width_in:["FR WIDTH","DR WIDTH ACT"],height_in:["FR HEIGHT","DR HEIGHT"],thickness:["DOOR THICK"],door_type:["ARCH DOOR TYPE"],frame_type:["ARCH FR TYPE"],head:["HEAD DETAIL"],jamb:["JAMB DETAIL"],sill:["SILL DETAIL"],fire_rating:["FR FIRE RATING","DR FIRE RATING"],hardware_set:["HEADING"],comments:["DR REMARKS"]};
+function buildRow(x){
+  const d=defs(),v=Array(COLS.length).fill(""),fromDef=new Set(),flag=new Set();
+  const set=(n,val)=>{const i=ci(n);if(i>=0)v[i]=clean(val)};
+  const mark=clean(x.mark);v[MK]=mark;set("QTY","1");
+  const pair=Number(x.leaves)===2,w=Number(x.leaf_width_in)||0;
+  set("OPG MODE",pair?"PR":"SGL");
+  set("FR WIDTH",ftIn(pair?w*2:w));set("FR HEIGHT",ftIn(x.height_in));
+  set("DR WIDTH ACT",ftIn(w));set("DR WIDTH INACT",pair?ftIn(w):"");set("DR HEIGHT",ftIn(x.height_in));
+  set("DOOR THICK",String(x.thickness??"").replace(/["”]/g,""));
+  const swap=$("optSwap").checked;
+  set(swap?"INSIDE LOCATION":"OUTSIDE LOCATION",x.to_room);set(swap?"OUTSIDE LOCATION":"INSIDE LOCATION",x.from_room);
+  set("HEADING",x.hardware_set);set("ARCH FR TYPE",x.frame_type);set("ARCH DOOR TYPE",x.door_type);
+  const rt=clean(x.fire_rating);set("FR FIRE RATING",rt);set("DR FIRE RATING",rt);
+  if($("optDet").checked){set("HEAD DETAIL",x.head);set("JAMB DETAIL",x.jamb);set("SILL DETAIL",x.sill)}
+  set("DR REMARKS",x.comments);set("HAND",x.hand);
+  set("BLDG",x.building);set("FLOOR",x.floor);set("FR MATL",x.frame_material);set("FR FINISH",x.frame_finish);set("DR MATL/FACE",x.door_material);set("DR FINISH",x.door_finish);
+  for(const k in d)if(d[k]&&ci(k)>=0){v[ci(k)]=d[k];fromDef.add(ci(k))}
+  const ext=/\bEXT/i.test((x.to_room||"")+" "+(x.from_room||""));set("INT/EXT",ext?"EXT":"INT");
+  if(rt)["FR SERIES","DR SERIES","DR CORE"].forEach(n=>flag.add(ci(n)));   // rated product may differ from the default series
+  (Array.isArray(x.unsure)?x.unsure:[]).forEach(f=>(UNSURE[f]||[]).forEach(n=>{if(ci(n)>=0)flag.add(ci(n))}));
+  if(!mark)flag.add(MK);
+  return{inc:!x.crossed_out,v,fromDef,flag};
+}
+
+/* ---------- grid ---------- */
+function renderGrid(){
+  const size=COLS.map((c,j)=>Math.max(4,Math.min(30,...state.rows.map(r=>r.v[j].length+1))));
+  $("grid").tHead.innerHTML="<tr><th class='pin'><span>USE</span></th>"+COLS.map(c=>`<th><span>${esc(c)}</span></th>`).join("")+"</tr>";
+  $("grid").tBodies[0].innerHTML=state.rows.map((r,i)=>{
+    return`<tr class="${r.inc?"":"skip"}"><td class="pin"><label><input type="checkbox" data-inc="${i}" ${r.inc?"checked":""} aria-label="Include row ${i+1}"> ${esc(r.v[MK])||"new"}</label> <button data-del="${i}" title="Delete row" style="padding:0 5px;border:0;background:transparent">×</button></td>`+
+      r.v.map((val,j)=>`<td class="${r.flag.has(j)?"q":r.fromDef.has(j)?"d":""}"><input type="text" size="${size[j]}" data-r="${i}" data-c="${j}" value="${esc(val)}" aria-label="${esc(COLS[j])}"></td>`).join("")+"</tr>"}).join("");
+  const inc=state.rows.filter(r=>r.inc).length;
+  $("count").textContent=state.rows.length?`${inc} of ${state.rows.length} rows in the export`:"no rows yet";
+  $("sampleNote").hidden=!state.isSample;
+}
+$("grid").addEventListener("input",e=>{const t=e.target;if(t.dataset.c){const r=state.rows[+t.dataset.r];r.v[+t.dataset.c]=t.value;r.flag.delete(+t.dataset.c);t.parentNode.className=""}});
+$("grid").addEventListener("change",e=>{const t=e.target;if(t.dataset.inc){state.rows[+t.dataset.inc].inc=t.checked;renderGrid()}});
+$("grid").addEventListener("click",e=>{const t=e.target;if(t.dataset.del){state.rows.splice(+t.dataset.del,1);renderGrid()}});
+$("add").onclick=()=>{state.rows.push(buildRow({}));renderGrid()};
+$("clear").onclick=()=>{state.rows=[];state.tables=[];state.isSample=false;renderGrid();renderMap()};
+
+/* ---------- export ---------- */
+function table(){const par=$("optParen").checked;return state.rows.filter(r=>r.inc).map(r=>r.v.map((c,j)=>par&&PAREN.has(j)&&c&&!/^\(.*\)$/.test(c)?"("+c+")":c))}
+const csvCell=s=>/[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s;
+function say2(t,err){$("status2").textContent=t;$("status2").className="status"+(err?" err":"")}
+function showText(t){const f=$("fallback");f.hidden=false;f.value=t;f.focus();f.select()}
+$("save").onclick=async()=>{
+  const t=table();if(!t.length)return say2("There are no rows to save.",true);
+  const [ext,sep,wide]=$("fmt").value.split("|"),q=c=>'"'+c.replace(/"/g,'""')+'"';
+  // the 61-column variant leaves blank slots where the import was seen to skip a position (after DR FINISH, and three after HEAD DETAIL)
+  const pad=(r,f)=>wide?[...r.slice(0,24),f(1),...r.slice(24,41),f(2),f(3),f(4),...r.slice(41)]:r;
+  const body=t.map(r=>pad(r,()=>"").map(c=>sep===","?q(c):c.replace(/[\t\n]/g," ")).join(sep));
+  if($("optHead").checked)body.unshift(pad(COLS,i=>"SPARE "+i).join(sep));
+  const csv=body.join("\r\n")+"\r\n";
+  let name=($("fname").value.trim()||"takeoff").replace(/\.(csv|txt)$/i,"")+"."+ext;
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/plain"}));a.download=name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+  say2("Saved "+name+". Look in your Downloads folder.");
+};
+$("copy").onclick=async()=>{
+  const tsv=($("optHead").checked?[COLS]:[]).concat(table()).map(r=>r.map(c=>c.replace(/[\t\n]/g," ")).join("\t")).join("\n");
+  try{await navigator.clipboard.writeText(tsv);say2("Copied, tab-separated. Paste into Excel or a grid.")}
+  catch(e){showText(tsv);say2("Copy was blocked. The rows are selected below: press Ctrl+C.",true)}
+};
+
+/* ---------- sources: photos and PDF pages ---------- */
+function rotated(base,rot,maxSide){
+  const s=Math.min(1,maxSide/Math.max(base.width,base.height)),w=Math.round(base.width*s),h=Math.round(base.height*s),q=rot%180!==0;
+  const c=document.createElement("canvas");c.width=q?h:w;c.height=q?w:h;const g=c.getContext("2d");
+  g.fillStyle="#fff";g.fillRect(0,0,c.width,c.height);g.translate(c.width/2,c.height/2);g.rotate(rot*Math.PI/180);g.drawImage(base,-w/2,-h/2,w,h);return c;
+}
+function toCanvas(bmp,maxSide){const s=Math.min(1,maxSide/Math.max(bmp.width,bmp.height)),c=document.createElement("canvas");c.width=Math.round(bmp.width*s);c.height=Math.round(bmp.height*s);c.getContext("2d").drawImage(bmp,0,0,c.width,c.height);return c}
+async function pdfPageCanvas(page,maxSide){const v1=page.getViewport({scale:1}),vp=page.getViewport({scale:maxSide/Math.max(v1.width,v1.height)}),c=document.createElement("canvas");c.width=Math.ceil(vp.width);c.height=Math.ceil(vp.height);const g=c.getContext("2d");g.fillStyle="#fff";g.fillRect(0,0,c.width,c.height);await page.render({canvasContext:g,viewport:vp}).promise;return c}
+function say(t,err){$("status").textContent=t;$("status").className="status"+(err?" err":"")}
+async function addFiles(files){
+  for(const f of files){
+    try{
+      if(f.type==="application/pdf"||/\.pdf$/i.test(f.name)){
+        if(!window.pdfjsLib){say("The PDF reader did not load. Photos still work; reload to try PDFs again.",true);continue}
+        const pdf=await pdfjsLib.getDocument({data:await f.arrayBuffer()}).promise;let pick=null;
+        if(pdf.numPages>8){pick=[];let anyText=false;
+          for(let p=1;p<=pdf.numPages;p++){if(p%10===1)say(`Looking through ${f.name} for door schedule sheets… ${p} of ${pdf.numPages}`);
+            const tc=await(await pdf.getPage(p)).getTextContent(),tx=tc.items.map(i=>i.str).join(" ");if(tx.length>200)anyText=true;if(/DOOR[\s,&A-Z]{0,24}SCHEDULE|OPENING\s+SCHEDULE/i.test(tx))pick.push(p)}
+          if(!pick.length){pick=null;say(anyText?`No sheet in ${f.name} mentions a door schedule, so the first sheets are listed. Tick the right one.`:`${f.name} has no selectable text, so every sheet is listed. Tick the door schedule.`)}}
+        const pages=pick||[...Array(Math.min(pdf.numPages,60))].map((_,i)=>i+1),n=pages.length;
+        for(const p of pages){const page=await pdf.getPage(p);
+          state.srcs.push({name:`${f.name} p.${p}`,rot:0,inc:n<=2||!!pick,thumb:await pdfPageCanvas(page,420),full:()=>pdfPageCanvas(page,4200),items:()=>pdfItems(page),render:(rot,pxW,rg)=>pdfRegion(page,rot,pxW,rg)});
+          renderSrcs()}
+        if(pick)say(`Found ${n} door schedule sheet${n>1?"s":""} in ${f.name} (${pdf.numPages} sheets). Press Read schedule.`);else if(pdf.numPages>2&&pdf.numPages<=8)say(`${f.name} has ${pdf.numPages} sheets. Tick the ones with the door schedule.`);
+      }else{
+        const bmp=await createImageBitmap(f,{imageOrientation:"from-image"});
+        state.srcs.push({name:f.name||"pasted image",rot:0,inc:true,thumb:toCanvas(bmp,420),full:async()=>toCanvas(await createImageBitmap(f,{imageOrientation:"from-image"}),4600),items:async()=>null,render:async(rot,pxW,rg)=>imgRegion(toCanvas(await createImageBitmap(f,{imageOrientation:"from-image"}),6000),rot,pxW,rg)});
+        bmp.close&&bmp.close();renderSrcs();
+      }
+    }catch(e){say(`Could not open ${f.name}. Use a PDF, JPEG or PNG (iPhone HEIC photos need converting first).`,true)}
+  }
+}
+function renderSrcs(){
+  const box=$("srcs");box.innerHTML="";
+  state.srcs.forEach((s,i)=>{
+    const d=document.createElement("div");d.className="src"+(s.inc?"":" off");
+    d.append(rotated(s.thumb,s.rot,300));
+    d.insertAdjacentHTML("beforeend",`<div class="nm" title="${esc(s.name)}">${esc(s.name)}</div><div class="row"><label><input type="checkbox" data-i="${i}" ${s.inc?"checked":""}> Read</label><span><button data-rot="${i}" title="Rotate a quarter turn">Rotate</button> <button data-rm="${i}" title="Remove">×</button></span></div>`);
+    box.append(d)});
+}
+$("srcs").addEventListener("click",e=>{const t=e.target;if(t.dataset.rot){const s=state.srcs[+t.dataset.rot];s.rot=(s.rot+90)%360;renderSrcs()}else if(t.dataset.rm){state.srcs.splice(+t.dataset.rm,1);renderSrcs()}});
+$("srcs").addEventListener("change",e=>{const t=e.target;if(t.dataset.i){state.srcs[+t.dataset.i].inc=t.checked;renderSrcs()}});
+const drop=$("drop");
+drop.onclick=()=>$("file").click();drop.onkeydown=e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();$("file").click()}};
+$("file").onchange=e=>{addFiles([...e.target.files]);e.target.value=""};
+["dragenter","dragover"].forEach(v=>drop.addEventListener(v,e=>{e.preventDefault();drop.classList.add("over")}));
+["dragleave","drop"].forEach(v=>drop.addEventListener(v,e=>{e.preventDefault();drop.classList.remove("over")}));
+drop.addEventListener("drop",e=>{const fs=[...e.dataTransfer.files];if(fs.length)addFiles(fs);else addText(e.dataTransfer.getData("text/plain"))});
+$("addText").onclick=()=>{if(!$("pasteBox").value.trim())return say("Paste some schedule lines into the box first.",true);addText($("pasteBox").value);$("pasteBox").value=""};
+document.addEventListener("paste",e=>{const fs=[...(e.clipboardData?.files||[])];if(fs.length)return addFiles(fs);if(/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName))return;const t=e.clipboardData?.getData("text/plain");if(t&&t.trim()){e.preventDefault();addText(t)}});
+
+/* ---------- reading engine: text positions -> table -> openings (runs entirely in the browser) ---------- */
+const norm=s=>String(s||"").replace(/[”“″]/g,'"').replace(/[’‘′`]/g,"'").replace(/''/g,'"').replace(/\s+/g," ").trim();
+const MARK=/^[A-Z]{0,3}[-.]?\d[A-Z0-9.\-\/]{0,9}$/i, DIMRE=/\d\s*['"]|\d\s*["']?\s*[xX×]\s*\(?\d|^\d-\d{1,2}$/, SIZERE=/\d\s*["']?\s*[xX×]\s*\(?\d/;
+const ROLES={"":"ignore",mark:"Door mark",from_room:"Room from / location",to_room:"Room to",size:"Size (W x H)",width:"Width",height:"Height",thickness:"Thickness",door_type:"Door type",door_material:"Door material",door_finish:"Door finish",frame_type:"Frame type",frame_material:"Frame material",frame_finish:"Frame finish",head:"Head detail",jamb:"Jamb detail",sill:"Sill / saddle detail",fire_rating:"Fire rating",hardware_set:"Hardware set",hand:"Hand",comments:"Comments"};
+let roleMem={};try{roleMem=JSON.parse(localStorage.getItem("s2t-roles")||"{}")}catch(e){}
+
+async function pdfItems(page){
+  const vp=page.getViewport({scale:1}),tc=await page.getTextContent(),raw=[],cnt=[0,0,0,0];
+  for(const it of tc.items){if(!it.str||!it.str.trim())continue;const t=pdfjsLib.Util.transform(vp.transform,it.transform),q=((Math.round(Math.atan2(t[1],t[0])/(Math.PI/2))%4)+4)%4;
+    cnt[q]+=it.str.length;raw.push({q,x:t[4],y:t[5],w:it.width,h:Math.hypot(t[2],t[3])||it.height||8,s:it.str})}
+  const q=cnt.indexOf(Math.max(...cnt));
+  return raw.filter(r=>r.q===q).map(r=>{let x=r.x,y=r.y;for(let k=0;k<q;k++)[x,y]=[y,-x];return{x,w:r.w,h:r.h,yc:y-r.h*.35,s:r.s,c:100}});
+}
+let ocrWorker=null,ocrProgress=()=>{};
+async function ocrItems(canvas){
+  if(!window.Tesseract)throw{msg:"The OCR engine did not load, so photos and scans cannot be read. Check the internet connection and reload. PDFs with real text still work."};
+  if(!ocrWorker){ocrWorker=await Tesseract.createWorker("eng",1,Object.assign({logger:m=>{if(m.status==="recognizing text")ocrProgress(m.progress)}},window.S2T_OCR_OPTS||{}));
+    await ocrWorker.setParameters({tessedit_pageseg_mode:"11",preserve_interword_spaces:"1"})}
+  const{data}=await ocrWorker.recognize(canvas);
+  const items=(data.words||[]).filter(w=>w.text&&w.text.trim()&&w.confidence>15).map(w=>({x:w.bbox.x0,w:w.bbox.x1-w.bbox.x0,h:w.bbox.y1-w.bbox.y0,yc:(w.bbox.y0+w.bbox.y1)/2,s:w.text,c:w.confidence}));
+  // straighten a slightly tilted photo so each schedule row lands on one line
+  const hs=items.map(i=>i.h).sort((a,b)=>a-b),H=hs[hs.length>>1]||20;let best=0,bs=-1;
+  for(let a=-4;a<=4;a+=.2){const t=Math.tan(a*Math.PI/180),m=new Map();for(const i of items){const k=Math.round((i.yc-(i.x+i.w/2)*t)/(H*.5));m.set(k,(m.get(k)||0)+1)}let s=0;m.forEach(v=>s+=v*v);if(s>bs){bs=s;best=t}}
+  items.forEach(i=>i.yc-=(i.x+i.w/2)*best);return items;
+}
+/* ---------- trade knowledge: what door-schedule values look like, used to put each value in the right field whatever the layout ---------- */
+const LX={
+  material:/^(HM|H\.M\.|HOLLOW METAL|HMI|INS(ULATED)? ?(HM|METAL)|MTL|METAL|STL|STEEL|GALV(ANIZED)? ?(STL|STEEL)|SS|STAINLESS( STEEL)?|WD|WOOD|SCW|SC ?WD|SOLID CORE( WOOD)?|SC|HC|HOLLOW CORE|PLAM|P\.?LAM\.?|AL|ALUM\.?|ALUMINUM|FRP|FIBERGLASS|GL|GLASS|TEMP(ERED)? GLASS|ALL GLASS|(ALUM\.? )?STOREFRONT( SLIDER)?|SF|CLAD|LEAD LINED|KD ?HM|KD|KNOCK ?DOWN|WELDED( HM)?)$/,
+  finish:/^(PT|PNT|PAINT(ED)?|P-?\d+|PT-?\d+[A-Z]?|EP-?\d+|EPOXY|PRIME(D|R)?|FACTORY( PRIMED?| FINISH(ED)?| PAINT(ED)?)?|FF|PF|PRE-?FIN(ISH(ED)?)?|MFR\.?|ST|STN|STAIN(ED)?( GRADE.*)?|ST-?\d+|WD-?\d+|CLEAR( ANOD(IZED)?| COAT| GLASS)?|ANOD(IZED)?|CL\.? ANOD\.?|DARK BRONZE|BRONZE|BLACK|WHITE|BONE WHITE|GALV(ANIZED)?|PC|POWDER ?COAT(ED)?|KYNAR|#?4 SS|SATIN|US\d+[A-Z]?|PL-?\d+|VARNISH|NATURAL|TRANSPARENT|OPAQUE|DP-?\d+|[A-Z]+\/CLEAR GLASS)$/,
+  typeword:/^(FLUSH|FL|FG|FULL (GLASS|LITE|GLAZED)|HG|HALF (GLASS|LITE)|NL|NARROW (LITE|LIGHT)|VL|VISION( LITE| PANEL)?|LV|LOUVER(ED)?|PANEL(ED)?|DUTCH|SLIDER|SLIDING|BARN|POCKET|BIFOLD|OHD|OVERHEAD|COILING|ROLL-?UP)$/,
+  hand:/^(LH|RH|LHR|RHR|LHA|RHA|LHRA|RHRA|LHRB|RHRB|LH\/RH)$/,
+  room:/\b(CORR(IDOR)?|OFFICE|STOR(AGE)?|STAIR|MECH(ANICAL)?|ELEC(TRICAL)?|TOILET|RESTROOM|JAN(ITOR)?|CLOSET|VEST(IBULE)?|LOBBY|EXT(ERIOR)?|ROOM|RM|HALL(WAY)?|CONF(ERENCE)?|CLASS(ROOM)?|LAB|KITCHEN|BREAK|LOUNGE|RECEPTION|ENTRY|ELEV(ATOR)?|IDF|MDF|DATA|SERVER|PANTRY|LOCKER|SHOWER|EXAM|WAITING|NURSE|COPY|WORKROOM|UTILITY|BOILER|PUMP|GARAGE|LOADING|RECEIVING|COMMONS|SUITE|LIBRARY|GYM|CAFE(TERIA)?|BASEMENT|SHAFT|TRASH|REFUSE|WELLNESS|HUDDLE|STUDIO|BEDROOM|BATH(ROOM)?|LIVING|DINING|TENANT|RETAIL|VAULT|SECURITY|SPRINKLER|METER|TELECOM|DEBRIEF|CONTROL|FACULTY|STUDENT|RESOURCE)\b/,
+  matword:/^(HM|HOLLOW|METAL|MTL|STEEL|STL|WOOD|WD|ALUM\.?|ALUMINUM|FRP|STOREFRONT|GLASS|STAINLESS)$/,finword:/^(PAINT(ED)?|PT|PNT|STAIN(ED)?|ANOD(IZED)?|PRIME(D)?|FACTORY|PREFINISHED|GALV(ANIZED)?)$/
+};
+const inchesOf=v=>{v=norm(v);if(!/^(?:\d{1,3}(?:\.\d+)?\s?"?|\d+'\s?-?\s?\d*(?:\s\d\/\d)?"?|\d-\d{1,2})$/.test(v))return 0;const n=dim(/\//.test(v)?v:v.replace(/(\d)\s+(?=\d)/g,"$1"));return n};
+const nominal=v=>{const m=/^(\d)(\d)(\d)(\d)$/.exec(v);if(!m)return null;const w=m[1]*12+ +m[2],h=m[3]*12+ +m[4];return w>=18&&w<=96&&h>=78&&h<=120&&+m[2]<=9&&+m[4]<=9?{w,h}:null};
+// how strongly a value looks like each kind of field, 0 to 1
+function looks(kind,v){
+  const V=norm(v).toUpperCase();if(!V||/^(?:-+|\.+|N\/?A|NONE)$/.test(V))return 0;const w=V.split(" ").length,inch=inchesOf(V);
+  switch(kind){
+    case"size":return/\d\s*['"]?\s*[X×]\s*\(?\d/.test(V)||/^(?:PR\.? |\(2\) )?\d-\d{1,2} \d{1,2}-\d{1,2}$/.test(V)?1:nominal(V)?.8:0;
+    case"width":return!inch?0:inch>=18&&inch<=48?1:inch>48&&inch<78?.8:inch<=96?.35:0;
+    case"height":return!inch?0:inch>=78&&inch<=120?1:inch>=72&&inch<78?.3:0;
+    case"thickness":return/^(?:1[ -]?3\/8|1[ -]?3\/4|2[ -]?1\/4|1[ -]?1\/2|1[ -]?1\/8|1\.75|1\.375|2\.25)\s?"?$/.test(V)?1:/^[12]\s?"$/.test(V)?.5:0;
+    case"fire_rating":return/^(?:\d(?:\s*-\s*\d\/\d)?\s*(?:HRS?|HOURS?)\.?|\d{2,3}\s*MIN(?:UTES?)?\.?|\d\/\d\s*HRS?\.?|[ABC]\s*LABEL)$/.test(V)?1:/^(?:NR|N\/R|NON-?RATED|UL|RATED|SMOKE)$/.test(V)?.8:/^(?:20|45|60|90|180)$/.test(V)?.7:0;
+    case"hardware_set":return/^(?:HS|HW|HWS|HDW|HDWE|SET|GROUP)\.?\s?[-#]?\s?\d+[A-Z]?$/.test(V)?1:/^#?\d{1,3}[A-Z]?$|^[A-Z]{1,2}$/.test(V)?.3:0;
+    case"material":return LX.material.test(V)?1:0;
+    case"finish":return LX.finish.test(V)?1:/^[A-Z]{1,3}-\d{1,2}[A-Z]?$/.test(V)&&!/^(HS|HW|SET)-/.test(V)?.5:0;
+    case"type":return LX.typeword.test(V)?.9:/^[A-Z]{1,2}$|^[A-Z]{0,2}-?\d{1,2}[A-Z]?$/.test(V)?.4:0;
+    case"detail":return/^\d{1,2}[A-Z]?\/[A-Z]{1,2}-?\d[\d.]*$/.test(V)?1:/^D?[HJST]-?\d{1,2}[A-Z]?$/.test(V)?.9:0;
+    case"head":return/^D?H-?\d/.test(V)?1:0;case"jamb":return/^D?J-?\d/.test(V)?1:0;case"sill":return/^D?[ST]-?\d/.test(V)?1:0;
+    case"hand":return LX.hand.test(V)?1:0;
+    case"num":return/^[A-Z]?\d{1,5}[A-Z]?$/.test(V)?.5:0;
+    case"mark":return MARK.test(V)&&V.length>=2?.6:0;
+    case"room":return LX.room.test(V)&&!/\d\s?["']/.test(V)?.9:/^[A-Z][A-Z .\/&'-]{3,}$/.test(V)&&!LX.material.test(V)&&!LX.finish.test(V)?.3:0;
+    case"comments":return w>=3&&!LX.material.test(V)&&!LX.finish.test(V)&&!LX.room.test(V)?.6:0;
+  }return 0;
+}
+const KINDS=["size","width","height","thickness","fire_rating","hardware_set","material","finish","type","detail","hand","num","room","comments"];
+// what a heading says the column is: a kind, plus door/frame or from/to where the heading says so
+function headKind(h){
+  const fr=/\bFR\b|FRAME|\bFRM\b/.test(h),dr=/DOOR|\bDR\b/.test(h),side=fr?"frame":dr?"door":"";
+  if(/HARDWARE|HDW|\bHW\b|H\.W\./.test(h))return{k:"hardware_set"};
+  if(/\bNUMBER\b|\bNUM\b|\bNO\b\.?|#/.test(h)&&!/DETAIL/.test(h))return{k:"num"};
+  if(/\bNAME\b/.test(h))return{k:"room",dir:/\bTO\b/.test(h)?"to":/\bFROM\b/.test(h)?"from":""};
+  if(/RATING|LABEL|\bFIRE\b/.test(h))return{k:"fire_rating"};if(/COMMENT|REMARK|NOTE/.test(h))return{k:"comments"};if(/THICK|THK/.test(h))return{k:"thickness"};
+  if(/\bHEAD\b/.test(h))return{k:"detail",d:"head"};if(/JAMB/.test(h))return{k:"detail",d:"jamb"};if(/SILL|SADDLE|THRESH/.test(h))return{k:"detail",d:"sill"};
+  if(/\bHAND(ING)?\b|SWING/.test(h))return{k:"hand"};
+  if(/\bFROM\b/.test(h))return{k:"room",dir:"from"};if(/\bTO\b/.test(h))return{k:"room",dir:"to"};if(/ROOM|LOCATION/.test(h))return{k:"room",dir:""};
+  if(/WIDTH\s*X|W\s*X\s*H/.test(h))return{k:"size"};if(/WIDTH/.test(h)&&!/HEIGHT/.test(h))return{k:"width"};if(/HEIGHT|\bHG?T\b/.test(h))return{k:"height"};if(/SIZE/.test(h))return{k:"size",weak:1};
+  if(/TYPE|ELEV/.test(h))return{k:"type",side};if(/MAT/.test(h))return{k:"material",side};if(/FIN/.test(h))return{k:"finish",side};
+  if(/SECURITY|ACCESS|SIGNAGE|GLAZ|GLASS|LOUVER|UNDERCUT|KEY/.test(h))return{k:"other"};
+  return null;
+}
+function guessRoles(cols){
+  const used={},pick=[];
+  cols.forEach((c,i)=>{c.role="";if(!i){c.role="mark";used.mark=1;return}
+    const h=c.head.toUpperCase(),vals=c.vals.filter(v=>v&&!/^(?:-+|\.+|N\/?A|NONE)$/i.test(v));
+    if(h&&roleMem[h]!==undefined){pick.push({i,role:roleMem[h],score:99});return}
+    const hk=headKind(h),sc={};KINDS.forEach(k=>sc[k]=vals.length?2.5*vals.reduce((s,v)=>s+looks(k,v),0)/vals.length:0);
+    if(hk&&hk.k!=="other")sc[hk.k]=(sc[hk.k]||0)+(hk.weak?1.5:3);
+    // a heading that says "ignore me" wins unless the values plainly say otherwise
+    let best="",bs=hk&&hk.k==="other"?2.2:.95;for(const k of KINDS)if(sc[k]>bs){bs=sc[k];best=k}
+    // a "size" heading over plain widths, or no heading at all: let the values decide between size, width and height
+    if(best==="size"&&sc.size<3.5&&Math.max(sc.width,sc.height)>sc.size-1.4)best=sc.width>=sc.height?"width":"height";
+    const mean=vals.map(inchesOf).filter(n=>n);pick.push({i,kind:best,score:bs,hk,mean:mean.length?mean.reduce((a,b)=>a+b,0)/mean.length:0,vals})});
+  // two unlabelled dimension columns: the smaller one is the width
+  const dims=pick.filter(p=>(p.kind==="width"||p.kind==="height")&&!(p.hk&&(p.hk.k==="width"||p.hk.k==="height")));
+  if(dims.length===2&&dims[0].kind===dims[1].kind){const[a,b]=dims[0].mean<=dims[1].mean?dims:[dims[1],dims[0]];a.kind="width";b.kind="height"}
+  const take=(p,role)=>{if(role&&!used[role]){cols[p.i].role=role;used[role]=1;return true}return false};
+  pick.filter(p=>p.role!==undefined).forEach(p=>take(p,p.role));
+  pick.filter(p=>p.role===undefined).sort((a,b)=>b.score-a.score||a.i-b.i).forEach(p=>{const side=p.hk&&p.hk.side,dir=p.hk&&p.hk.dir,k=p.kind;
+    if(k==="material"||k==="finish"||k==="type"){take(p,(side||"door")+"_"+k)||(!side&&take(p,"frame_"+k))}
+    else if(k==="room"){take(p,dir==="to"?"to_room":dir==="from"?"from_room":"")||take(p,"from_room")||take(p,"to_room")}
+    else if(k==="detail"){const d=p.hk&&p.hk.d,byVal=["head","jamb","sill"].map(r=>[r,p.vals.reduce((s,v)=>s+looks(r,v),0)]).sort((a,b)=>b[1]-a[1])[0];
+      take(p,d||"")||take(p,byVal[1]>0?byVal[0]:"")||take(p,"head")||take(p,"jamb")||take(p,"sill")}
+    else if(k&&k!=="num")take(p,k)});
+  // unlabelled pairs keep reading order: first material/finish/type column is the door's, the second the frame's
+  for(const k of["material","finish","type"]){const a=cols.findIndex(c=>c.role==="door_"+k),b=cols.findIndex(c=>c.role==="frame_"+k);
+    if(a>b&&b>=0){const pa=pick.find(p=>p.i===a),pb=pick.find(p=>p.i===b);if(pa&&pb&&!(pa.hk&&pa.hk.side)&&!(pb.hk&&pb.hk.side)){cols[a].role="frame_"+k;cols[b].role="door_"+k}}}
+  const f=cols.findIndex(c=>c.role==="from_room"),t=cols.findIndex(c=>c.role==="to_room");
+  if(f>t&&t>=0){const pf=pick.find(p=>p.i===f),pt=pick.find(p=>p.i===t);if(pf&&pt&&!(pf.hk&&pf.hk.dir)&&!(pt.hk&&pt.hk.dir)){cols[f].role="to_room";cols[t].role="from_room"}}
+}
+function parseOne(items,name){
+  items=(items||[]).filter(i=>i.s&&i.s.trim());if(items.length<8)return null;
+  const hs=items.map(i=>i.h).sort((a,b)=>a-b),H=hs[hs.length>>1]||8;
+  items.sort((a,b)=>a.yc-b.yc);const lines=[];
+  for(const it of items){const L=lines[lines.length-1];if(L&&Math.abs(it.yc-L.yc)<=H*.6){L.items.push(it);L.yc+=(it.yc-L.yc)/L.items.length}else lines.push({yc:it.yc,items:[it]})}
+  for(const L of lines){L.items.sort((a,b)=>a.x-b.x);L.g=[];for(const it of L.items){const g=L.g[L.g.length-1],gap=g?it.x-g.x1:0;
+      if(g&&gap<Math.max(it.h,H)*.45){g.s+=(gap<H*.12?"":" ")+it.s;g.x1=Math.max(g.x1,it.x+it.w)}else L.g.push({x:it.x,x1:it.x+it.w,s:it.s})}
+    L.g.forEach(g=>g.s=norm(g.s));L.door=L.g.length>=4&&MARK.test(L.g[0].s)&&L.g.some(g=>DIMRE.test(g.s))}
+  const first=lines.findIndex(L=>L.door),doors=lines.filter(L=>L.door);if(doors.length<2)return null;
+  const gaps=doors.slice(1).map((L,i)=>L.yc-doors[i].yc).sort((a,b)=>a-b),pitch=gaps[gaps.length>>1]||H*2;
+  const x0=Math.min(...doors.map(L=>L.items[0].x)),x1=Math.max(...doors.map(L=>Math.max(...L.items.map(i=>i.x+i.w))));
+  // columns: x ranges that (almost) every door row leaves blank are the gaps between columns
+  const u=H*.15,n=Math.ceil((x1-x0)/u)+1,cov=new Uint16Array(n);
+  for(const L of doors){const seen=new Uint8Array(n);for(const it of L.items){for(let b=Math.max(0,Math.floor((it.x-x0)/u));b<=Math.min(n-1,Math.floor((it.x+it.w-x0)/u));b++)seen[b]=1}for(let b=0;b<n;b++)cov[b]+=seen[b]}
+  const thr=Math.floor(doors.length*.08);let cols=[],cur=null;
+  for(let b=0;b<n;b++){if(cov[b]>thr){if(!cur){cur={a:x0+b*u,b:0};cols.push(cur)}cur.b=x0+(b+1)*u}else cur=null}
+  const hit=(it,c)=>it.x<c.b&&it.x+it.w>c.a;
+  for(const L of doors)for(const it of L.items)if(!cols.some(c=>hit(it,c))){cols.push({a:it.x,b:it.x+it.w});cols.sort((p,q)=>p.a-q.a);
+    for(let i=cols.length-1;i>0;i--)if(cols[i].a<cols[i-1].b){cols[i-1].b=Math.max(cols[i-1].b,cols[i].b);cols.splice(i,1)}}
+  cols.sort((p,q)=>p.a-q.a);
+  const colOf=xc=>{let bi=0,bd=1e18;cols.forEach((c,i)=>{const d=xc<c.a?c.a-xc:xc>c.b?xc-c.b:0;if(d<bd){bd=d;bi=i}});return bi};
+  // header text sitting above each column
+  let hl=-1;for(let i=first-1;i>=0;i--)if(lines[i].g.length>=4){hl=i;break}
+  cols.forEach(c=>c.h=[]);
+  if(hl>=0)for(let i=0;i<first;i++){const L=lines[i];if(L.yc<lines[hl].yc-pitch*5)continue;if(/SCHEDULE/i.test(L.g.map(g=>g.s).join(" "))&&L.g.length<4)continue;
+    if(i>hl&&L.g.length===1&&L.g[0].s.length>=12)continue;for(const g of L.g)cols[colOf((g.x+g.x1)/2)].h.push(g.s)}
+  // rows
+  const rows=[];let bld="",floor="",prev=null,last=0;const markEnd=cols[0].b+H*.3;
+  for(let i=Math.max(0,hl+1);i<lines.length;i++){const L=lines[i];
+    if(L.door){const r={cells:cols.map(()=>""),low:new Set(),bld,floor,yc:L.yc};for(const it of L.items){const k=colOf(it.x+it.w/2);r.cells[k]=norm(r.cells[k]+" "+it.s);if(it.c<55)r.low.add(k)}rows.push(r);prev=r;last=L.yc}
+    else if(prev&&L.yc-last<H*2.6&&L.g[0].x>markEnd&&L.g[0].x<x1){for(const g of L.g){const k=colOf((g.x+g.x1)/2);if(k>0)prev.cells[k]=norm(prev.cells[k]+" "+g.s)}last=L.yc}
+    else if(L.g.length<=2&&L.g[0].x<x0+(x1-x0)*.2&&L.g.map(g=>g.s).join(" ").length>=5&&!/^NOTE/i.test(L.g[0].s)&&(i<first||L.yc<doors[doors.length-1].yc)){const t=L.g.map(g=>g.s).join(" ").replace(/[_:]+$/,"");if(/FLOOR|LEVEL|BASEMENT|CELLAR|ROOF|MEZZ|PENTHOUSE/i.test(t))floor=t;else bld=t;prev=null}
+    else prev=null}
+  const out=cols.map((c,i)=>({head:norm(c.h.join(" ")),vals:rows.map(r=>r.cells[i]),role:""}));guessRoles(out);
+  return{name,cols:out,rows};
+}
+/* ---------- find every schedule on the sheet, even with other drawing text beside it or two schedules side by side ---------- */
+function parseItems(items,name){
+  items=(items||[]).filter(i=>i.s&&i.s.trim());if(items.length<20)return[];
+  const hs=items.map(i=>i.h).sort((a,b)=>a-b),H=hs[hs.length>>1]||8,sorted=items.slice().sort((a,b)=>a.yc-b.yc),lines=[],cand=[];
+  for(const it of sorted){const L=lines[lines.length-1];if(L&&Math.abs(it.yc-L.yc)<=H*.6){L.items.push(it);L.yc+=(it.yc-L.yc)/L.items.length}else lines.push({yc:it.yc,items:[it]})}
+  for(const L of lines){L.items.sort((a,b)=>a.x-b.x);const g=[];for(const it of L.items){const p=g[g.length-1],gap=p?it.x-p.x1:0;
+      if(p&&gap<Math.max(it.h,H)*.45){p.s+=(gap<H*.12?"":" ")+it.s;p.x1=Math.max(p.x1,it.x+it.w)}else g.push({x:it.x,x1:it.x+it.w,s:it.s})}
+    g.forEach(q=>q.s=norm(q.s));let dimBefore=false;
+    g.forEach((q,i)=>{const d=DIMRE.test(q.s);if(!d&&MARK.test(q.s)&&g.slice(i+1,i+9).some(z=>DIMRE.test(z.s)))cand.push({x:q.x,s:q.s,L,after:dimBefore});if(d)dimBefore=true})}
+  if(cand.length<2)return[];
+  cand.sort((a,b)=>a.x-b.x);const cl=[];
+  for(const c of cand){const k=cl[cl.length-1];if(k&&c.x-k.last<=H*1.5){k.m.push(c);k.last=c.x}else cl.push({m:[c],last:c.x,x:c.x})}
+  cl.forEach(k=>{k.n=new Set(k.m.map(c=>c.L)).size;k.distinct=new Set(k.m.map(c=>c.s)).size/k.m.length;k.after=k.m.filter(c=>c.after).length/k.m.length});
+  const max=Math.max(...cl.map(k=>k.n)),prim=cl.find(k=>k.n>=max*.8&&k.n>=2);if(!prim)return[];
+  const picks=cl.filter(k=>k===prim||(k.x>prim.x&&k.n>=3&&k.n>=max*.3&&k.distinct>=.9&&k.after>=.8)).sort((a,b)=>a.x-b.x),out=[];
+  picks.forEach((k,i)=>{const a=k.x-H*3,b=picks[i+1]?picks[i+1].x-H*.5:Infinity,nm=picks.length>1?`${name}, schedule ${i+1}`:name;
+    let t=parseOne(items.filter(it=>it.x>=a&&it.x<b),nm);
+    if(!t||t.rows.length<k.n*.7){const tt=parseText(lines.map(L=>L.items.filter(it=>it.x>=a&&it.x<b).map(it=>it.s).join(" ")).filter(s=>s.trim()).join("\n"),nm);if(tt&&tt.rows.length>(t?t.rows.length:0))t=tt}
+    if(t)out.push(t)});
+  return out;
+}
+/* ---------- pasted text: rows copied out of a PDF or spreadsheet, columns in any order ---------- */
+const T_RATE=/^(?:\d(?:\s*-\s*\d\/\d)?\s*(?:HRS?|HOURS?)\.?|\d{2,3}\s*MIN\.?|\d\/\d\s*HRS?\.?|[ABC]\s*LABEL)$/i,T_SIZE=/^(?:\(\s*2\s*\)|PR\.?|PAIR)?\s*\d+(?:'\s*-?\s*\d*|\s?-\s?\d{1,2})?\s*"?\s*[xX×]\s*\d+(?:'\s*-?\s*\d*|\s?-\s?\d{1,2})?\s*"?(?:\s*[xX×]\s*[\d \/]+"?)?$/;
+const T_DIM=/^(?:\d{1,3}(?:\.\d+)?\s?"?|\d+'\s?-?\s?\d*(?:\s\d\/\d)?"?|\d-\d{1,2})$/,T_BLANK=/^(?:-+|\.+|N\/?A|NONE)$/i;
+const TEXTROLE={from_room:1,to_room:1,door_material:1,door_finish:1,frame_material:1,frame_finish:1,comments:1,other:1};
+// what each kind of column may look like; returns a cost (lower is better) or Infinity when the text cannot be that column
+function fitRole(role,s,n,voc,lineMode){
+  const S=s.toUpperCase(),k=voc&&voc[role]&&voc[role][S]||0;
+  if(TEXTROLE[role]){if(!n)return role==="comments"||role==="other"?0:2.5;if(n===1&&T_BLANK.test(s))return.1;let c=(role==="other"?.5:.08)*n+(lineMode?(n-1)*.7:0),alpha=true;
+    for(const w of S.split(" ")){if(/\d\s?["']|\d[xX×]\d/.test(w)||T_BLANK.test(w))c+=3;else if(T_RATE.test(w))c+=2;else if(/^\d{2,}[A-Z]?$/.test(w))c+=.9;else if(/^(SET|HS|HW|HDW)$/.test(w))c+=1.5;
+      if(!/^[A-Z][A-Z.\/&',()-]*$/.test(w))alpha=false}
+    const df=alpha&&voc&&voc["*"]&&voc["*"][S]||0,ws=S.split(" ");
+    if(/material$/.test(role)){if(LX.material.test(S))c-=1.3;else if(LX.finish.test(S)||LX.room.test(S))c+=1}
+    else if(/finish$/.test(role)){if(LX.finish.test(S))c-=1.1;else if(ws.some(w=>LX.matword.test(w))&&!/GLASS$/.test(S))c+=1.2}
+    else if(/room$/.test(role)){if(LX.room.test(S))c-=.6;if(ws.some(w=>LX.finword.test(w))||LX.material.test(S)&&!LX.room.test(S))c+=1}
+    else if(role==="comments"&&ws.length===1&&(LX.material.test(S)||LX.finish.test(S)))c+=.8;
+    return c-.3*Math.log(1+df)-.45*Math.log(1+k)}
+  if(!n)return role==="fire_rating"?.6:role==="mark"?Infinity:/^(head|jamb|sill)$/.test(role)?1.4:/type$/.test(role)?3:/^(size|width|height)$/.test(role)?3.5:role==="hardware_set"?2.5:2;
+  if(T_BLANK.test(s))return role==="mark"?Infinity:.1;
+  const hit=ok=>ok?-Math.min(1,.3*Math.log(1+k)):Infinity;
+  switch(role){
+    case"mark":return n===1&&MARK.test(s)?0:Infinity;
+    case"num":return hit(/^[A-Z]{0,2}-?\d{1,5}[A-Z]?$/i.test(s));
+    case"size":return T_SIZE.test(s)?0:Infinity;
+    case"width":case"height":return T_DIM.test(s)?0:Infinity;
+    case"thickness":return/^[12]\s\d\/\d\s?"?$/.test(s)?0:/^\d{1,2}\/\d{1,2}\s?"?$|^[12](?:\.\d+)?\s?"?$|^[12]\d\/\d"?$/.test(s)?.4:Infinity;
+    case"door_type":case"frame_type":return hit(!/\s/.test(s)&&/^[A-Z]{1,2}$|^[A-Z]{0,3}[-.]?\d{1,3}[A-Z]?$/i.test(s));
+    case"head":case"jamb":case"sill":return hit(!/\s/.test(s)&&/^[A-Z0-9][A-Z0-9.\-\/]{0,11}$/i.test(s)&&/\d/.test(s));
+    case"fire_rating":return T_RATE.test(s)?0:/^\d{2,3}$/.test(s)?.5:Infinity;
+    case"hand":return LX.hand.test(S)?0:Infinity;
+    case"hardware_set":return/^(?:SET|HW|HS|HDW|GROUP|TYPE)\.?\s[A-Z0-9.\-#]{1,6}$/i.test(s)?-.6+hit(true):hit(!/\s/.test(s)&&/^[A-Z]{1,2}$|^#?[A-Z]{0,4}[-.]?\d{1,4}[A-Z]?$/i.test(s));
+  }return Infinity;
+}
+function fitRow(tok,roles,voc,lineMode){
+  const m=tok.length,n=roles.length,f=[...Array(n+1)].map(()=>Array(m+1).fill(Infinity)),bk=[...Array(n+1)].map(()=>Array(m+1).fill(0));f[0][0]=0;
+  for(let i=0;i<n;i++){const r=roles[i],mx=TEXTROLE[r]?(lineMode?3:9):lineMode?1:r==="size"?5:r==="thickness"||r==="width"||r==="height"||r==="fire_rating"||r==="hardware_set"?2:1;
+    for(let j=0;j<=m;j++){if(f[i][j]===Infinity)continue;for(let L=0;L<=mx&&j+L<=m;L++){const c=f[i][j]+fitRole(r,tok.slice(j,j+L).join(" "),L,voc,lineMode);if(c<f[i+1][j+L]){f[i+1][j+L]=c;bk[i+1][j+L]=L}}}}
+  if(f[n][m]===Infinity)return null;const cells=Array(n);for(let i=n,j=m;i>0;i--){const L=bk[i][j];cells[i-1]=tok.slice(j-L,j).join(" ");j-=L}
+  return{cells,cost:f[n][m]};
+}
+// read the column order off the heading text
+function headRoles(head){
+  const H=" "+norm(head).toUpperCase()+" ",out=[],used={};let m;
+  const re=/\b(DOOR\s*(?:NO\b\.?|NUMBER|#|MARK)|OPENING\s*(?:NO\b\.?|NUMBER)|MARK|WIDTH\s*X\s*HEIGHT|W\s*X\s*H|THICK(?:NESS)?|THK\b\.?|WIDTH|HEIGHT|(?:DOOR|DR|FRAME|FR)\b\.?\s*(?:TYPE|MAT(?:ERIA)?'?L\b\.?|FIN(?:ISH)?\b\.?)|TYPE|MAT(?:ERIA)?'?L\b\.?|FINISH|HEAD|JAMB|SILL|SADDLE|THRESHOLD|FIRE\s*RATING|RATING|LABEL|(?:HARDWARE|HDWE?|HDWR|HW)\b\.?\s*(?:SET|GROUP|NO\b\.?)?|SECURITY\s*ACCESS|ACCESS\s*CONTROL|DOOR\s*SIGNAGE|SIGNAGE|GLAZING|GLASS|LOUVER|UNDERCUT|KEYING|COMMENTS?|REMARKS?|NOTES?|NAME|NUMBER|FROM|TO|ROOM|LOCATION|SIZE|HAND(?:ING)?|SWING|ELEV(?:ATION)?)(?=[\s.:,]|$)/g;
+  const push=(role,label)=>{if(role!=="num"&&role!=="other"&&used[role])role="other";used[role]=1;out.push({role,label})};
+  const tk=[];while((m=re.exec(H)))tk.push(m[1].replace(/\s+/g," "));
+  const hasName=tk.includes("NAME");
+  tk.forEach((t,i)=>{const fr=/^(FRAME|FR)\b/.test(t),dr=/^(DOOR|DR)\b/.test(t),prev=tk[i-1]||"",prev2=tk[i-2]||"",next=tk[i+1]||"";
+    // "FROM ROOM NAME" / "TO NAME": the direction word right before decides; otherwise the first room column is "from"
+    const dir=prev==="FROM"||prev==="TO"?prev:(prev==="ROOM"||prev==="LOCATION")&&(prev2==="FROM"||prev2==="TO")?prev2:"";
+    const room=()=>dir==="TO"&&!used.to_room?"to_room":dir==="FROM"&&!used.from_room?"from_room":used.from_room?"to_room":"from_room";
+    if(/^(DOOR\s*(NO|NUMBER|#|MARK)|OPENING|MARK)/.test(t)){if(!used.mark)push("mark",t)}
+    else if(t==="FROM"||t==="TO"){if(!hasName&&next!=="ROOM"&&next!=="LOCATION"&&next!=="NUMBER")push(t==="TO"&&!used.to_room?"to_room":!used.from_room&&t==="FROM"?"from_room":used.from_room?"to_room":"from_room",t)}
+    else if(t==="NAME")push(room(),(dir?dir+" ":"")+"ROOM NAME");
+    else if(t==="NUMBER")push("num",(dir?dir+" ":"")+"ROOM NUMBER");
+    else if(t==="ROOM"||t==="LOCATION"){if(next!=="NAME"&&next!=="NUMBER"&&!hasName)push(room(),(dir?dir+" ":"")+t)}
+    else if(/^WIDTH\s*X|^W\s*X/.test(t))push("size",t);
+    else if(t==="SIZE")push("size?",t);
+    else if(/^THICK|^THK/.test(t))push("thickness",t);else if(t==="WIDTH")push("width",t);else if(t==="HEIGHT")push("height",t);
+    else if(/TYPE$/.test(t))push(fr?"frame_type":dr?"door_type":used.door_type?"frame_type":"door_type",t);
+    else if(/MAT/.test(t))push(fr?"frame_material":dr?"door_material":used.door_material?"frame_material":"door_material",t);
+    else if(/FIN/.test(t))push(fr?"frame_finish":dr?"door_finish":used.door_finish?"frame_finish":"door_finish",t);
+    else if(t==="HEAD")push("head",t);else if(t==="JAMB")push("jamb",t);else if(/SILL|SADDLE|THRESH/.test(t))push("sill",t);
+    else if(/RATING|LABEL/.test(t))push("fire_rating",t);
+    else if(/^(HARDWARE|HDW|HW)/.test(t))push("hardware_set",t);
+    else if(/COMMENT|REMARK|NOTE/.test(t))push("comments",t);
+    else if(/^HAND|^SWING/.test(t))push("hand",t);
+    else push("other",t)});
+  // a bare "SIZE" is a real column only when there is no separate width or height
+  const sep=out.some(o=>o.role==="width"||o.role==="height"||o.role==="size");
+  return out.filter(o=>o.role!=="size?"||!sep).map(o=>o.role==="size?"?{role:"size",label:o.label}:o);
+}
+const PRESETS=[["mark","from_room","to_room","size","thickness","door_type","door_material","door_finish","frame_type","frame_material","frame_finish","head","jamb","sill","fire_rating","hardware_set","comments"],
+  ["mark","from_room","num","to_room","num","thickness","width","height","door_type","door_material","door_finish","frame_material","frame_finish","head","jamb","sill","fire_rating","hardware_set","comments"],
+  ["mark","from_room","size","door_type","door_material","frame_type","frame_material","fire_rating","hardware_set","comments"],["mark","size","door_type","frame_type","fire_rating","hardware_set","comments"]];
+const HEADING=/FLOOR|LEVEL|BASEMENT|CELLAR|ROOF|MEZZ|PENTHOUSE|BUILDING|BLDG|WING|PHASE|\bAREA\b/i;
+function parseText(text,name){
+  const lines=String(text).replace(/\r/g,"").replace(/ /g," ").split("\n").filter(l=>l.trim());if(!lines.length)return null;
+  const first1=l=>norm(l).split(" ")[0],hasDim=l=>norm(l).split(" ").some(w=>/\d\s?["']|\d[xX×]\d|^\d-\d{1,2}$/.test(w));
+  const tabs=lines.filter(l=>l.split("\t").length>=4).length,wide=lines.filter(l=>l.trim().split(/ {2,}/).length>=5).length;
+  // 1. real cell boundaries (tabs, or runs of spaces): the heading row tells us what each column is
+  if(tabs>=2||wide>=Math.max(2,lines.length*.5)){
+    const sp=l=>(tabs>=2?l.split("\t"):l.trim().split(/ {2,}/)).map(norm),R=lines.map(sp),isRow=c=>c.length>=3&&MARK.test(c[0])&&!/^\d\.$/.test(c[0])&&c.filter(v=>v).length>=3;
+    const fi=R.findIndex(isRow);if(fi<0)return null;const n=Math.max(...R.filter(isRow).map(c=>c.length));
+    let head=[];for(let i=fi-1;i>=0;i--)if(R[i].filter(v=>v).length>=Math.min(4,n-1)){head=R[i];break}
+    // a grouped heading row above ("FROM ROOM", "FRAME") fills in the context for bare "NAME" / "TYPE" cells
+    const rows=[];let bld="",floor="";
+    R.forEach((c,i)=>{if(i<fi)return;if(isRow(c)){while(c.length<n)c.push("");rows.push({cells:c.slice(0,n),low:new Set(),bld,floor})}else{const t=norm(lines[i]);if(c.filter(v=>v).length<=2&&t.length>=3&&!/^NOTE/i.test(t)){if(/FLOOR|LEVEL|BASEMENT|CELLAR|ROOF|MEZZ|PENTHOUSE/i.test(t))floor=t;else bld=t}}});
+    const cols=[...Array(n)].map((_,i)=>({head:head[i]||"",vals:rows.map(r=>r.cells[i]),role:""}));guessRoles(cols);return{name,cols,rows};
+  }
+  // 2. one value per line (how some PDF viewers copy a table)
+  const lone=lines.filter(l=>l.trim().split(/\s+/).length<=3).length/lines.length,vertical=lone>.8&&lines.filter(l=>MARK.test(norm(l))).length>=2;
+  let recs=[],headTxt="",bldAt={},vL=null;
+  if(vertical){vL=lines.map(norm);const s0=vL.findIndex(v=>MARK.test(v));if(s0<0)return null;let he=s0;if(he>0&&HEADING.test(vL[he-1])&&vL[he-1].split(" ").length<=5)he--;headTxt=vL.slice(0,he).join(" ")}
+  else{
+    // 3. one opening per line, single spaces between values
+    const L=lines.map(norm),isRow=l=>{const t=l.split(" ");return t.length>=4&&MARK.test(t[0])&&!/^\d{1,2}[.)]$/.test(t[0])&&(hasDim(l)||t.length>=7)};
+    const fi=L.findIndex(isRow);if(fi<0)return null;const hd=[];
+    const cont={};L.forEach((l,i)=>{if(isRow(l)){recs.push(l.split(" "))}else if(i>fi&&!(HEADING.test(l)&&l.split(" ").length<=6)&&l.split(" ").length<=6&&recs.length){cont[recs.length-1]=1}else if(i<fi){if(HEADING.test(l)&&l.split(" ").length<=5&&i===fi-1)bldAt[0]=l;else hd.push(l)}else if(HEADING.test(l)&&l.split(" ").length<=6)bldAt[recs.length]=l});
+    headTxt=hd.join(" ");bldAt.cont=cont;
+  }
+  // values that come back again and again down the table ("HOLLOW METAL", "PUMP ROOM") show where one cell stops and the next starts
+  const dfOf=rs=>{const df={};rs.forEach(t=>{const seen=new Set();for(let i=0;i<t.length;i++)for(let n=1;n<=4&&i+n<=t.length;n++)seen.add(t.slice(i,i+n).join(" ").toUpperCase());seen.forEach(k=>df[k]=(df[k]||0)+1)});return df};
+  // cut a one-value-per-line paste into rows: each row starts at a door number and must fit the column order
+  const cutVertical=roles=>{const K=roles.length,out=[],at={},df=dfOf([vL.filter(v=>!MARK.test(v))].flatMap(a=>a.map(v=>[v])));let i=vL.findIndex(v=>MARK.test(v)),pending="";
+    while(i<vL.length){if(!MARK.test(vL[i])){if(HEADING.test(vL[i])&&vL[i].split(" ").length<=5)pending=vL[i];i++;continue}
+      let bestL=0,bc=Infinity;for(let Ln=Math.min(K+3,vL.length-i);Ln>=Math.max(2,K-5);Ln--){const e=i+Ln;if(e<vL.length&&!MARK.test(vL[e])&&!(HEADING.test(vL[e])&&e+1<vL.length&&MARK.test(vL[e+1])))continue;
+        const f=fitRow(vL.slice(i,e),roles,{"*":df},true);if(f&&f.cost+Math.abs(Ln-K)*.3<bc){bc=f.cost+Math.abs(Ln-K)*.3;bestL=Ln}}
+      if(!bestL){i++;continue}if(pending){at[out.length]=pending;pending=""}out.push(vL.slice(i,i+bestL));i+=bestL}
+    return{recs:out,at}};
+  let hr=headRoles(headTxt);if(hr.filter(o=>o.role!=="other").length<3||hr[0].role!=="mark"&&!hr.some(o=>o.role==="mark"))hr=null;
+  if(hr&&hr[0].role!=="mark")hr=[{role:"mark",label:"DOOR NO."},...hr.filter(o=>o.role!=="mark")];
+  const tryRoles=roles=>{let rs=recs,at=bldAt;if(vertical){const c=cutVertical(roles);rs=c.recs;at=c.at}
+    let voc={"*":dfOf(rs)},fit=null;for(let pass=0;pass<4;pass++){fit=rs.map(t=>fitRow(t,roles,voc,vertical));voc={"*":voc["*"]};
+      fit.forEach(f=>{if(f)f.cells.forEach((v,i)=>{if(v&&!T_BLANK.test(v)){const o=voc[roles[i]]=voc[roles[i]]||{};o[v.toUpperCase()]=(o[v.toUpperCase()]||0)+1}})})}
+    return{fit,recs:rs,at,ok:fit.filter(f=>f).length,cost:fit.reduce((s,f)=>s+(f?f.cost:25),0)+(rs.length?0:1e6),roles}};
+  let best=hr?tryRoles(hr.map(o=>o.role)):null;const labels=hr?hr.map(o=>o.label):null;
+  if(!best||best.ok<Math.max(1,best.recs.length*.6)){const alt=PRESETS.map(tryRoles).sort((a,b)=>b.ok-a.ok||a.cost-b.cost)[0];if(!best||alt.ok>best.ok){best=alt;best.preset=true}}
+  recs=best.recs;bldAt=best.at;
+  const roles=best.roles,rows=[];let bld="",floor="";
+  recs.forEach((t,k)=>{if(bldAt[k]){if(/FLOOR|LEVEL|BASEMENT|CELLAR|ROOF|MEZZ|PENTHOUSE/i.test(bldAt[k]))floor=bldAt[k];else bld=bldAt[k]}
+    const f=best.fit[k],low=new Set();let cells;
+    if(f){cells=f.cells.map(v=>T_BLANK.test(v)?"":v);if(f.cost>2.4||best.preset)roles.forEach((r,i)=>{if(i&&(TEXTROLE[r]||best.preset))low.add(i)});
+      // single-spaced lines carry no cell boundaries, so wherever two wordy columns touch the split is a best guess: mark both to check
+      if(!vertical)roles.forEach((r,i)=>{if(i&&cells[i]&&TEXTROLE[r]&&r!=="other"&&(TEXTROLE[roles[i-1]]||TEXTROLE[roles[i+1]]||(bldAt.cont&&bldAt.cont[k])))low.add(i)})}
+    else{cells=roles.map(()=>"");cells[0]=t[0];const ci=roles.indexOf("comments");cells[ci<0?roles.length-1:ci]=t.slice(1).join(" ");roles.forEach((r,i)=>low.add(i))}
+    rows.push({cells,low,bld,floor})});
+  if(!rows.length)return null;const seen={};
+  return{name,cols:roles.map((role,i)=>{const r=role==="num"||role==="other"||seen[role]?"":role;seen[role]=1;return{head:best.preset||!labels?(ROLES[r]||"(not used)"):labels[i],vals:rows.map(x=>x.cells[i]),role:r}}),rows};
+}
+function addText(text){
+  if(!text||!text.trim())return;const ls=text.replace(/\r/g,"").split("\n").filter(l=>l.trim()),c=document.createElement("canvas");c.width=420;c.height=300;
+  const g=c.getContext("2d");g.fillStyle="#fff";g.fillRect(0,0,420,300);g.fillStyle="#222";g.font="11px monospace";ls.slice(0,22).forEach((l,i)=>g.fillText(l.replace(/\t/g,"  ").slice(0,64),8,16+i*13));
+  state.srcs.push({name:`Pasted text, ${ls.length} lines`,rot:0,inc:true,thumb:c,full:async()=>c,items:async()=>null,text});renderSrcs();
+  say(`Added ${ls.length} pasted lines. Press Read schedule.`);
+}
+/* ---------- drawings with no text layer (printed or scanned PDFs): find the table's ruled lines, clean the image, OCR it, and file each word by the cell it sits in ---------- */
+const FULLPAGE={x:0,y:0,w:1,h:1};
+async function pdfRegion(page,rot,pxW,rg){
+  const rotation=(((page.rotate||0)+rot)%360+360)%360,v1=page.getViewport({scale:1,rotation}),sc=pxW/(rg.w*v1.width),vp=page.getViewport({scale:sc,rotation});
+  const c=document.createElement("canvas");c.width=Math.max(1,Math.round(pxW));c.height=Math.max(1,Math.round(rg.h*v1.height*sc));
+  const g=c.getContext("2d",{willReadFrequently:true});if(!g)throw{msg:"This computer ran out of memory drawing the sheet at high resolution."};
+  g.fillStyle="#fff";g.fillRect(0,0,c.width,c.height);
+  await page.render({canvasContext:g,viewport:vp,transform:[1,0,0,1,-rg.x*v1.width*sc,-rg.y*v1.height*sc]}).promise;return c;
+}
+function imgRegion(base,rot,pxW,rg){
+  const up=rotated(base,rot,1e9),sw=rg.w*up.width,sh=rg.h*up.height,c=document.createElement("canvas");c.width=Math.max(1,Math.round(pxW));c.height=Math.max(1,Math.round(pxW*sh/sw));
+  const g=c.getContext("2d",{willReadFrequently:true});g.fillStyle="#fff";g.fillRect(0,0,c.width,c.height);g.drawImage(up,rg.x*up.width,rg.y*up.height,sw,sh,0,0,c.width,c.height);return c;
+}
+// long straight runs of dark pixels are ruled lines; optionally wipe them and any grey shading so only text is left
+function linesOf(canvas,minRun,erase,thr){
+  const w=canvas.width,h=canvas.height,g=canvas.getContext("2d",{willReadFrequently:true}),id=g.getImageData(0,0,w,h),d=id.data,T=(thr||120)*3;
+  const bk=new Uint8Array(w*h);for(let i=0,p=0;i<bk.length;i++,p+=4)bk[i]=d[p]+d[p+1]+d[p+2]<T?1:0;
+  const mask=erase?new Uint8Array(w*h):null,hs=[],vs=[];
+  for(let y=0;y<h;y++){let run=0,o=y*w;for(let x=0;x<=w;x++){if(x<w&&bk[o+x])run++;else{if(run>=minRun){hs.push([y,x-run,x]);if(mask)mask.fill(1,o+x-run,o+x)}run=0}}}
+  for(let x=0;x<w;x++){let run=0;for(let y=0;y<=h;y++){if(y<h&&bk[y*w+x])run++;else{if(run>=minRun){vs.push([x,y-run,y]);if(mask)for(let k=y-run;k<y;k++)mask[k*w+x]=1}run=0}}}
+  const merge=segs=>{const L=[];for(const[p,a,b]of segs){let hit=null;for(let i=L.length-1;i>=0&&i>=L.length-60;i--){const l=L[i];if(p-l.p1<=2&&a<l.b&&b>l.a){hit=l;break}}
+      if(hit){hit.p1=p;hit.a=Math.min(hit.a,a);hit.b=Math.max(hit.b,b)}else L.push({p0:p,p1:p,a,b})}return L};
+  vs.sort((p,q)=>p[0]-q[0]);
+  const hl=merge(hs).map(l=>({y:(l.p0+l.p1)/2,x0:l.a,x1:l.b})),vl=merge(vs).map(l=>({x:(l.p0+l.p1)/2,y0:l.a,y1:l.b}));
+  if(erase){for(let y=0;y<h;y++)for(let x=0;x<w;x++){const i=y*w+x;let on=bk[i];
+        if(on&&(mask[i]||(x>0&&mask[i-1])||(x<w-1&&mask[i+1])||(y>0&&mask[i-w])||(y<h-1&&mask[i+w])))on=0;
+        const v=on?0:255,p=i*4;d[p]=d[p+1]=d[p+2]=v;d[p+3]=255}
+    g.putImageData(id,0,0)}
+  return{hl,vl};
+}
+// a table is a stack of ruled lines that share the same left and right ends, crossed by several long vertical rules
+function findTables(hl,vl,W,H){
+  const tol=W*.012,L=hl.filter(l=>l.x1-l.x0>W*.12).sort((a,b)=>(b.x1-b.x0)-(a.x1-a.x0)),used=new Set(),out=[];
+  for(const a of L){if(used.has(a))continue;const g=L.filter(b=>!used.has(b)&&Math.abs(b.x0-a.x0)<=tol&&Math.abs(b.x1-a.x1)<=tol);g.forEach(b=>used.add(b));
+    if(g.length<6)continue;g.sort((p,q)=>p.y-q.y);const y0=g[0].y,y1=g[g.length-1].y,xs=[];
+    vl.filter(v=>v.x>=a.x0-tol&&v.x<=a.x1+tol&&Math.min(v.y1,y1)-Math.max(v.y0,y0)>(y1-y0)*.3).map(v=>v.x).sort((p,q)=>p-q).forEach(x=>{if(!xs.length||x-xs[xs.length-1]>tol/2)xs.push(x)});
+    if(xs.length<6)continue;const gaps=g.slice(1).map((l,i)=>l.y-g[i].y).filter(v=>v>3).sort((p,q)=>p-q);
+    out.push({x0:a.x0,x1:a.x1,y0,y1,rows:g.length,cols:xs.length,pitch:gaps[Math.floor(gaps.length*.25)]||20})}
+  return out.sort((p,q)=>q.rows*q.cols-p.rows*p.cols);
+}
+function gridTable(words,hl,vl,name){
+  words=words.filter(w=>w.s&&(w.s==="-"||!/^[|_\-—=~.,:;'"`\\\/\[\]()]+$/.test(w.s)));if(words.length<10||hl.length<4)return null;
+  const hs=words.map(w=>w.h).sort((a,b)=>a-b),H=hs[hs.length>>1]||20,Lmax=Math.max(...hl.map(l=>l.x1-l.x0)),full=hl.filter(l=>l.x1-l.x0>=Lmax*.9).sort((a,b)=>a.y-b.y);
+  if(full.length<4)return null;const X0=Math.min(...full.map(l=>l.x0)),X1=Math.max(...full.map(l=>l.x1)),ys=[];
+  full.forEach(l=>{if(!ys.length||l.y-ys[ys.length-1]>H*.8)ys.push(l.y)});
+  const span=ys[ys.length-1]-ys[0],acc=[];
+  vl.filter(v=>v.x>=X0-H&&v.x<=X1+H).sort((a,b)=>a.x-b.x).forEach(v=>{const k=acc[acc.length-1];if(k&&v.x-k.x<=H*.35)k.len+=v.y1-v.y0;else acc.push({x:v.x,len:v.y1-v.y0})});
+  const xs=acc.filter(k=>k.len>=span*.45).map(k=>k.x);if(xs.length<4)return null;
+  if(xs[0]-X0>H)xs.unshift(X0);if(X1-xs[xs.length-1]>H)xs.push(X1);
+  const nb=ys.length-1,nc=xs.length-1,cell=[...Array(nb)].map(()=>[...Array(nc)].map(()=>[]));
+  const idx=(arr,v)=>{let lo=0,hi=arr.length-1;if(v<arr[0]||v>=arr[hi])return-1;while(hi-lo>1){const m=(lo+hi)>>1;if(arr[m]<=v)lo=m;else hi=m}return lo};
+  for(const w of words){const b=idx(ys,w.yc),c=idx(xs,w.x+w.w/2);if(b>=0&&c>=0)cell[b][c].push(w)}
+  const txt=ws=>{ws=ws.slice().sort((a,b)=>a.yc-b.yc);const ln=[];for(const w of ws){const l=ln[ln.length-1];if(l&&Math.abs(w.yc-l.y)<=H*.6)l.w.push(w);else ln.push({y:w.yc,w:[w]})}
+    return norm(ln.map(l=>l.w.sort((a,b)=>a.x-b.x).map(w=>w.s).join(" ")).join(" "))};
+  const T=cell.map(r=>r.map(txt));
+  const mk=[...Array(Math.min(4,nc))].map((_,c)=>T.filter(r=>MARK.test(r[c])&&r.some((v,j)=>j!==c&&DIMRE.test(v))).length),mx=Math.max(...mk),mc=mx<2?-1:mk.findIndex(n=>n>=mx*.6);
+  if(mc<0)return null;
+  const isDoor=r=>MARK.test(r[mc])&&(r.some((v,j)=>j!==mc&&DIMRE.test(v))||r.filter(v=>v).length>=Math.max(4,nc*.4));
+  const first=T.findIndex(isDoor),loose=(r,b)=>b>first&&!MARK.test(r[mc])&&r.some((v,j)=>j!==mc&&DIMRE.test(v))&&r.filter(v=>v).length>=Math.max(5,nc*.4);let hb=-1,hn=2;for(let b=0;b<first;b++){const n=T[b].filter(v=>v).length;if(n>hn){hn=n;hb=b}}
+  const rows=[],skipped=[];let bld="",floor="";
+  T.forEach((r,b)=>{if(b===hb)return;
+    if(isDoor(r)||loose(r,b)){const low=new Set();if(!isDoor(r))low.add(0);cell[b].forEach((ws,c)=>{if(c>=mc&&ws.some(w=>w.c<70))low.add(c-mc)});rows.push({cells:r.slice(mc).map(v=>v.toUpperCase()),low,bld,floor,b})}
+    else if(b>hb){const f=r.filter(v=>v),t=norm(r.join(" "));if(f.length&&f.length<=3&&t.length>=3&&t.length<=60&&!/^NOTE/i.test(t)){if(/FLOOR|LEVEL|BASEMENT|CELLAR|ROOF|MEZZ|PENTHOUSE|\bFL\b/i.test(t))floor=t;else bld=t}else if(f.length>=4&&b>first)skipped.push(t.slice(0,60))}});
+  if(rows.length<2)return null;
+  const cols=[...Array(nc-mc)].map((_,i)=>({head:hb>=0?T[hb][i+mc]:"",vals:rows.map(r=>r.cells[i]),role:""}));guessRoles(cols);
+  return{name,cols,rows,skipped,geom:{ys,xs,mc,H}};
+}
+let ocrPool=[];
+async function ocrWorkers(){
+  if(!window.Tesseract)throw{msg:"The OCR engine did not load, so drawings without selectable text cannot be read. Check the internet connection and reload."};
+  const want=Math.max(1,Math.min(3,(navigator.hardwareConcurrency||4)-1));
+  while(ocrPool.length<want){const w=await Tesseract.createWorker("eng",1,Object.assign({},window.S2T_OCR_OPTS||{}));await w.setParameters({tessedit_pageseg_mode:"11",preserve_interword_spaces:"1"});ocrPool.push(w)}
+  return ocrPool;
+}
+const wordsOf=(data,ox,oy)=>(data.words||[]).filter(w=>w.text&&w.text.trim()&&w.confidence>=30).map(w=>({x:w.bbox.x0+ox,w:w.bbox.x1-w.bbox.x0,h:w.bbox.y1-w.bbox.y0,yc:(w.bbox.y0+w.bbox.y1)/2+oy,s:w.text.trim(),c:w.confidence}));
+async function ocrTiles(canvas,onp){
+  const pool=await ocrWorkers(),W=canvas.width,H=canvas.height,nx=Math.ceil(W/2800),ny=Math.ceil(H/2800),tw=W/nx,th=H/ny,ov=120,jobs=[],out=[];
+  for(let j=0;j<ny;j++)for(let i=0;i<nx;i++)jobs.push([i,j]);let done=0;const total=jobs.length;
+  await Promise.all(pool.map(async wk=>{while(jobs.length&&!stopped){const[i,j]=jobs.shift(),x0=Math.max(0,Math.floor(i*tw-ov)),y0=Math.max(0,Math.floor(j*th-ov)),x1=Math.min(W,Math.ceil((i+1)*tw+ov)),y1=Math.min(H,Math.ceil((j+1)*th+ov));
+      const t=document.createElement("canvas");t.width=x1-x0;t.height=y1-y0;t.getContext("2d").drawImage(canvas,x0,y0,t.width,t.height,0,0,t.width,t.height);
+      const{data}=await wk.recognize(t);
+      for(const w of wordsOf(data,x0,y0)){const cx=w.x+w.w/2;if(cx>=i*tw&&cx<(i+1)*tw&&w.yc>=j*th&&w.yc<(j+1)*th)out.push(w)}
+      onp(++done/total)}}));
+  return out;
+}
+// sparse OCR skips lone letters and digits (door type "A", hardware set "I") and misreads some numbers, so short cells are read again one at a time
+function inkBox(g,x0,x1,y0,y1){
+  const x=Math.ceil(x0)+4,y=Math.ceil(y0)+4,w=Math.floor(x1)-4-x,hh=Math.floor(y1)-4-y;if(w<8||hh<8)return null;
+  const d=g.getImageData(x,y,w,hh).data;let ink=0,ax=w,bx=0,ay=hh,by=0;for(let q=0,yy=0;yy<hh;yy++)for(let xx=0;xx<w;xx++,q+=4)if(d[q]<128){ink++;if(xx<ax)ax=xx;if(xx>bx)bx=xx;if(yy<ay)ay=yy;if(yy>by)by=yy}
+  return ink<5||ink>w*hh*.4?null:{x:x+ax,y:y+ay,w:bx-ax+1,h:by-ay+1};
+}
+async function ocrCells(R,jobs,mode,white,tick){
+  const pool=await ocrWorkers(),q=jobs.slice();
+  await Promise.all(pool.map(async wk=>{await wk.setParameters({tessedit_pageseg_mode:mode,tessedit_char_whitelist:white});
+    while(q.length&&!stopped){const j=q.shift(),k=Math.max(1,Math.min(4,44/j.h)),c=document.createElement("canvas");c.width=Math.round(j.w*k)+48;c.height=Math.round(j.h*k)+48;
+      const cg=c.getContext("2d");cg.fillStyle="#fff";cg.fillRect(0,0,c.width,c.height);cg.drawImage(R,j.x,j.y,j.w,j.h,24,24,Math.round(j.w*k),Math.round(j.h*k));
+      const{data}=await wk.recognize(c),ws=(data.words||[]).filter(w=>w.text&&w.text.trim());j.s=ws.map(w=>w.text.trim()).join(" ");j.conf=ws.length?Math.min(...ws.map(w=>w.confidence)):0;tick()}
+    await wk.setParameters({tessedit_pageseg_mode:"11",tessedit_char_whitelist:""})}));
+}
+async function refineCells(R,t,onp){
+  const{ys,xs,mc}=t.geom,g=R.getContext("2d",{willReadFrequently:true}),box=(r,i)=>inkBox(g,xs[i+mc],xs[i+mc+1],ys[r.b],ys[r.b+1]),empty=[];
+  for(const r of t.rows)r.cells.forEach((v,i)=>{if(v)return;const b=box(r,i);if(b)empty.push(Object.assign(b,{r,i}))});
+  const CHECK={mark:"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-./",width:"0123456789'\"-/ ",height:"0123456789'\"-/ ",thickness:"0123456789'\"-/ ",size:"0123456789'\"-/ xX()PR."},again=[];
+  t.cols.forEach((c,i)=>{if(!CHECK[c.role])return;for(const r of t.rows){const v=r.cells[i];if(!v||v.length>12)continue;const b=box(r,i);if(b&&b.h<t.geom.H*2.2)again.push(Object.assign(b,{r,i,white:CHECK[c.role],role:c.role}))}});
+  const total=empty.length+again.length;if(!total)return;let done=0;const tick=()=>onp(++done/total);
+  const one=empty.filter(j=>j.w<j.h*1.3),line=empty.filter(j=>j.w>=j.h*1.3);
+  if(one.length)await ocrCells(R,one,"10","ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-",tick);
+  if(line.length)await ocrCells(R,line,"7","",tick);
+  for(const w of[...new Set(again.map(j=>j.white))])await ocrCells(R,again.filter(j=>j.white===w),"7",w,tick);
+  // a lone upright stroke is the letter I; OCR often returns nothing for it
+  empty.forEach(j=>{if(!j.s&&j.w<j.h*.35){j.s="I";j.conf=40}});
+  // within one column, settle the usual mix-ups between I and 1, O and 0
+  const byCol={};empty.filter(j=>j.s).forEach(j=>(byCol[j.i]=byCol[j.i]||[]).push(j));
+  for(const k in byCol){const s1=byCol[k].filter(j=>j.s.length===1),le=s1.filter(j=>/[A-HJ-NP-Z]/.test(j.s)).length,di=s1.filter(j=>/[2-9]/.test(j.s)).length;
+    s1.forEach(j=>{if(le>di)j.s=j.s.replace(/[1|l]/,"I").replace("0","O");else if(di>le)j.s=j.s.replace(/[I|l]/,"1").replace("O","0")})}
+  empty.forEach(j=>{if(j.s){j.r.cells[j.i]=j.s.toUpperCase();if(j.conf<70)j.r.low.add(j.i)}});
+  const sq=v=>String(v).toUpperCase().replace(/[\s'"]/g,"");
+  // two reads of the same cell: agreement confirms it; otherwise keep the value seen more often in that column and mark the cell to check
+  const freq={};again.forEach(j=>{j.old=j.r.cells[j.i];j.ok=!!j.s&&(j.role==="mark"?MARK.test(j.s):/\d/.test(j.s));j.same=j.ok&&sq(j.s)===sq(j.old);if(j.same){const k=j.i+"|"+sq(j.old);freq[k]=(freq[k]||0)+1}});
+  again.forEach(j=>{if(j.same){j.r.low.delete(j.i);return}j.r.low.add(j.i);if(!j.ok)return;
+    if(j.role==="mark")j.r.alt=j.s.toUpperCase();else if((freq[j.i+"|"+sq(j.s)]||0)>(freq[j.i+"|"+sq(j.old)]||0))j.r.cells[j.i]=j.s.toUpperCase()});
+  // door numbers on one floor normally start with the same digit and have the same length, which settles most 1-for-7 slips
+  const grp={};t.rows.forEach(r=>(grp[r.floor+"|"+r.bld]=grp[r.floor+"|"+r.bld]||[]).push(r));
+  const mode=a=>{const c={};let b="",n=0;a.forEach(v=>{c[v]=(c[v]||0)+1;if(c[v]>n){n=c[v];b=v}});return[b,n]},dg=m=>m.replace(/\D/g,"").length;
+  for(const k in grp){const g=grp[k].filter(r=>r.cells[0]),[lead,ln]=mode(g.map(r=>r.cells[0][0])),[len]=mode(g.map(r=>dg(r.cells[0])));if(g.length<4||ln<g.length*.6)continue;
+    for(const r of g){const cand=[r.cells[0],r.alt].filter(Boolean);let m=cand.find(c=>c[0]===lead&&dg(c)===len)||cand.find(c=>c[0]===lead)||cand[0];
+      if(m[0]!==lead&&/[17I]/.test(m[0])&&/[17]/.test(lead)){m=lead+m.slice(1);r.low.add(0)}
+      r.cells[0]=m}}
+  // "BLACKICLEAR" is "BLACK/CLEAR" when both halves are words used elsewhere in the table
+  const vocab=new Set();t.rows.forEach(r=>r.cells.forEach(v=>v.split(/[^A-Z]+/).forEach(w=>{if(w.length>=3)vocab.add(w)})));
+  t.rows.forEach(r=>r.cells.forEach((v,i)=>{r.cells[i]=v.replace(/\b([A-Z]{3,})I([A-Z]{3,})\b/g,(m,a,b)=>vocab.has(a)&&vocab.has(b)?a+"/"+b:m)}));
+  t.cols.forEach((c,i)=>c.vals=t.rows.map(r=>r.cells[i]));
+}
+async function readByGrid(s,tag){
+  let rot=s.rot,c1=await s.render(rot,4200,FULLPAGE),g1=linesOf(c1,Math.round(c1.width/70),false,150);
+  const sw=g=>({hl:g.vl.map(v=>({y:v.x,x0:v.y0,x1:v.y1})),vl:g.hl.map(l=>({x:l.y,y0:l.x0,y1:l.x1}))});
+  let cands=findTables(g1.hl,g1.vl,c1.width,c1.height);const g1s=sw(g1),side=findTables(g1s.hl,g1s.vl,c1.height,c1.width);
+  const a=cands[0],b=side[0];if(!a&&!b)return[];
+  // which way up? OCR a small patch from the middle of the biggest table at each quarter turn and keep the one that reads as words
+  const useSide=b&&(!a||b.rows*b.cols>a.rows*a.cols),t0=useSide?{x0:b.y0,x1:b.y1,y0:b.x0,y1:b.x1,pitch:b.pitch}:a;
+  const k0=Math.min(6,Math.max(1,70/t0.pitch)),sidePx=1300/k0,cx=(t0.x0+t0.x1)/2,cy=(t0.y0+t0.y1)/2;
+  const rgT={x:Math.max(0,cx-sidePx/2)/c1.width,y:Math.max(0,cy-sidePx/2)/c1.height,w:sidePx/c1.width,h:sidePx/c1.height};
+  say(`Checking which way up ${tag} is…`);
+  const patch=await s.render(rot,1300,rgT);linesOf(patch,90,true);const pool=await ocrWorkers();let bq=0,bs=-1;
+  for(let q=0;q<4;q++){const{data}=await pool[0].recognize(q?rotated(patch,q*90,1e9):patch);let sc=0;for(const w of data.words||[])if(w.confidence>60&&/^[A-Za-z]{3,}$/.test(w.text))sc+=w.text.length;if(sc>bs){bs=sc;bq=q}}
+  if(bq||useSide){rot=(rot+bq*90)%360;c1=await s.render(rot,4200,FULLPAGE);g1=linesOf(c1,Math.round(c1.width/70),false,150);cands=findTables(g1.hl,g1.vl,c1.width,c1.height)}
+  const out=[];
+  for(const[i,t]of cands.slice(0,3).entries()){if(stopped)break;
+    const m=t.pitch*1.2,rx0=Math.max(0,t.x0-m),ry0=Math.max(0,t.y0-m),rx1=Math.min(c1.width,t.x1+m),ry1=Math.min(c1.height,t.y1+m),rw=rx1-rx0,rh=ry1-ry0;
+    const k=Math.min(Math.max(1,72/t.pitch),Math.sqrt(40e6/(rw*rh)),11000/Math.max(rw,rh)),rg={x:rx0/c1.width,y:ry0/c1.height,w:rw/c1.width,h:rh/c1.height};
+    say(`Drawing table ${i+1} on ${tag} at high resolution…`);await new Promise(r=>setTimeout(r,30));
+    const R=await s.render(rot,Math.round(rw*k),rg),ln=linesOf(R,Math.max(60,Math.round(t.pitch*k*1.5)),true);
+    const words=await ocrTiles(R,p=>say(`Reading table ${i+1} on ${tag}… ${Math.round(p*100)}%`));
+    const tb=gridTable(words,ln.hl,ln.vl,cands.length>1?`${s.name}, table ${i+1}`:s.name);
+    if(tb){await refineCells(R,tb,p=>say(`Double-checking door numbers, sizes and single letters in table ${i+1} on ${tag}… ${Math.round(p*100)}%`));out.push(tb)}}
+  return out;
+}
+function dim(s){s=norm(s);let m=s.match(/(\d+)\s*'\s*-?\s*(\d+(?:\.\d+)?)?/);if(m)return m[2]===undefined&&+m[1]>=12?+m[1]:m[1]*12+(+m[2]||0);m=s.match(/^(\d+)\s*-\s*(\d{1,2})$/);if(m)return m[1]*12+ +m[2];m=s.match(/(\d+(?:\.\d+)?)/);return m?+m[1]:0}
+function toRecord(t,row){
+  const g=r=>{const i=t.cols.findIndex(c=>c.role===r);return i<0?"":row.cells[i]||""},unsure=[];
+  let leaves=1,w=0,h=0;const s=g("size");
+  if(s){const m=s.match(/^(\(?\s*2\s*\)|PR\.?|PAIR)?\s*(.*?)\s*[xX×]\s*(.*?)(?:\s*[xX×].*)?$/i),nm=nominal(s.replace(/^(\(?\s*2\s*\)|PR\.?|PAIR)\s*/i,"")),two=s.match(/^(\(?\s*2\s*\)|PR\.?|PAIR)?\s*(\d+'?\s?-\s?\d+"?|\d+")\s+(\d+'?\s?-\s?\d+"?|\d+")$/i);
+    if(m){if(m[1])leaves=2;w=dim(m[2]);h=dim(m[3])}else if(nm){w=nm.w;h=nm.h;if(/^(\(?\s*2|PR|PAIR)/i.test(s))leaves=2}else if(two){if(two[1])leaves=2;w=dim(two[2]);h=dim(two[3])}}
+  else{const sp=v=>/\//.test(v)?v:v.replace(/(\d)\s+(?=\d)/g,"$1");w=dim(sp(g("width")));h=dim(sp(g("height")))}
+  if(leaves===1&&/\bPR\b|\bPAIR\b/i.test(row.cells.join(" ")))leaves=2,w=w>=64?w/2:w;
+  else if(leaves===1&&w>=64){leaves=2;w/=2;unsure.push("leaves")}
+  if(!w||!h||w>60||h<60||h>144)unsure.push("leaf_width_in","height_in");
+  row.low.forEach(k=>{const r=t.cols[k].role;if(r==="size"||r==="width"||r==="height")unsure.push("leaf_width_in","height_in");else if(r)unsure.push(r)});
+  const rec={building:row.bld,floor:row.floor||"",leaves,leaf_width_in:w,height_in:h,unsure};
+  for(const r of["mark","from_room","to_room","thickness","door_type","door_material","door_finish","frame_type","frame_material","frame_finish","head","jamb","sill","fire_rating","hardware_set","hand","comments"])rec[r]=g(r);
+  // a value that does not look like its field at all is marked to check
+  if(rec.fire_rating&&!clean(rec.fire_rating)==false&&!looks("fire_rating",rec.fire_rating))unsure.push("fire_rating");if(clean(rec.thickness)&&!looks("thickness",rec.thickness))unsure.push("thickness");if(clean(rec.hand)&&!looks("hand",rec.hand))unsure.push("hand");
+  rec.thickness=String(rec.thickness||"").replace(/^([12])\s*([1357])\s*[\/Il1|]\s*([48])\b/,"$1 $2/$3").replace(/^1\s*3\s*4\b/,"1 3/4").replace(/^1\s*3\s*8\b/,"1 3/8");
+  return rec;
+}
+function rebuild(keep){
+  const seen=new Set(keep.map(r=>r.v[MK])),rows=[];
+  for(const t of state.tables)for(const r of t.rows){const rec=toRecord(t,r),m=clean(rec.mark);if(m&&seen.has(m))continue;seen.add(m);rows.push(buildRow(rec))}
+  state.rows=keep.concat(rows);state.isSample=false;renderGrid();return rows;
+}
+function renderMap(){
+  $("mapwrap").hidden=!state.tables.length;
+  $("map").innerHTML=state.tables.map((t,ti)=>`<h3>${esc(t.name)}: ${t.rows.length} rows</h3><table><tr><th>Heading on the drawing</th><th>First row</th><th>Second row</th><th>Goes to</th></tr>`+
+    t.cols.map((c,ci)=>`<tr><td title="${esc(c.head)}">${esc(c.head)||"(no heading found)"}</td><td>${esc(c.vals[0])}</td><td>${esc(c.vals[1])}</td><td><select data-t="${ti}" data-c="${ci}" aria-label="Column ${ci+1} goes to">${Object.keys(ROLES).map(k=>`<option value="${k}" ${k===c.role?"selected":""}>${ROLES[k]}</option>`).join("")}</select></td></tr>`).join("")+"</table>").join("");
+}
+$("map").addEventListener("change",e=>{const s=e.target;if(!s.dataset.t)return;const t=state.tables[+s.dataset.t],c=t.cols[+s.dataset.c];
+  if(s.value)t.cols.forEach(o=>{if(o!==c&&o.role===s.value)o.role=""});c.role=s.value;
+  if(c.head){roleMem[c.head.toUpperCase()]=s.value;try{localStorage.setItem("s2t-roles",JSON.stringify(roleMem))}catch(e){}}
+  rebuild(state.keep||[]);renderMap()});
+$("go").onclick=async()=>{
+  const list=state.srcs.filter(s=>s.inc);
+  if(!list.length)return say("Add a PDF or photo first and tick at least one sheet.",true);
+  stopped=false;$("go").disabled=true;$("stop").hidden=false;const tables=[];let failed="",empty=[];
+  for(let i=0;i<list.length&&!stopped;i++){
+    const s=list[i],tag=`${s.name} (${i+1} of ${list.length})`;
+    try{
+      say(`Reading ${tag}…`);await new Promise(r=>setTimeout(r,30));
+      let items=s.text?null:await s.items(),t=[];
+      if(s.text){const p=parseText(s.text,s.name);if(p)t=[p]}
+      else if(items&&items.length>=40)t=parseItems(items,s.name);
+      if(!t.length&&!s.text&&!(items&&items.length>=400)){
+        say(`${tag} has no selectable text, so it will be read by OCR. The first run downloads the OCR engine, and a full sheet takes a few minutes.`);await new Promise(r=>setTimeout(r,30));
+        try{t=await readByGrid(s,tag)}catch(e){if(e&&e.msg)throw e;console.error(e);t=[]}
+        if(!t.length&&!stopped){ocrProgress=p=>say(`No ruled table found, trying plain OCR on ${tag}… ${Math.round(p*100)}%`);t=parseItems(await ocrItems(rotated(await s.full(),s.rot,4600)),s.name)}}
+      if(t.length)tables.push(...t);else empty.push(s.name);
+    }catch(e){failed=e&&e.msg||`Something went wrong reading ${s.name}.`;if(e&&!e.msg)console.error(e)}
+  }
+  $("go").disabled=false;$("stop").hidden=true;
+  if(tables.length){
+    const keep=$("optAppend").checked&&!state.isSample?state.rows:[];state.keep=keep;
+    state.tables=tables;const rows=rebuild(keep);renderMap();$("mapwrap").open=true;
+    const fl=rows.filter(r=>r.flag.size).length;
+    say(`Read ${rows.length} openings.`+(fl?` ${fl} rows have yellow cells to check.`:"")+" Check the columns list under Openings, then compare the rows with the drawing. Crossed-out rows are not detected: untick them yourself."+(tables.some(t=>t.skipped&&t.skipped.length)?` ${tables.reduce((n,t)=>n+(t.skipped?t.skipped.length:0),0)} table rows could not be read as openings (starting: ${tables.flatMap(t=>t.skipped||[]).slice(0,3).map(s=>s.slice(0,18)).join("; ")}). Add them by hand.`:"")+(empty.length?` No schedule found on: ${empty.join(", ")}.`:"")+(failed?" "+failed:""),!!failed);
+  }else say(failed||(stopped?"Stopped.":"No door schedule rows were found. Check that the right sheet is ticked and upright (use Rotate), and for photos use a sharper, straighter, closer shot."),true);
+};
+$("stop").onclick=()=>{stopped=true;say("Stopping after this sheet…")};
+
+/* ---------- example rows from the Well 44/44A schedule ---------- */
+const E="ELECTRONIC ACCESS CONTROLS",P="EXIT/PANIC HARDWARE",B2="WELL NO.44/44A",B3="WELL NO.44/44A BOOSTER";
+[["2-001A",B2,"GAC BASEMENT","EXTERIOR",2,"2","F2",1,"","HS-1A",""],["2-001B",B2,"GAC BASEMENT","EXTERIOR",2,"2","F2",1,"","HS-1",E],["2-101A",B2,"GAC BASEMENT","ELECTRICAL ROOM",1,"3","F1",2,"","HS-3",""],["2-101B",B2,"ELECTRICAL ROOM","EXTERIOR",2,"2","F2",1,"","HS-1",E+", "+P],["2-101C",B2,"ELECTRICAL ROOM","EXTERIOR",1,"1","F1",1,"","HS-2",E+", "+P],["2-101D",B2,"ELECTRICAL ROOM","EXTERIOR",2,"2","F2",1,"","HS-1A",""],["2-102A",B2,"SODIUM HYPOCHLORITE RM","EXTERIOR",2,"2","F2",1,"","HS-1",E+", "+P],["2-102B",B2,"SODIUM HYPOCHLORITE RM","ANALYZER RM",1,"3","F1",2,"1-1/2 HR","HS-3",P],["2-103",B2,"GAC BASEMENT","ANALYZER RM",1,"3","F1",2,"1-1/2 HR","HS-3",""],["2-104A",B2,"CLEARWELL PUMP RM","EXTERIOR",2,"2","F2",1,"","HS-1",E],["2-104B",B2,"GAC BASEMENT","CLEARWELL PUMP RM",1,"3","F1",2,"","HS-3",""],["2-104C",B2,"GAC BASEMENT","CLEARWELL PUMP RM",1,"3","F1",2,"","HS-3",""],["3-101A",B3,"PUMP ROOM","EXTERIOR",1,"1","F1",1,"","HS-2",E],["3-101B",B3,"PUMP ROOM","EXTERIOR",2,"2","F2",1,"","HS-1",E],["3-101C",B3,"PUMP ROOM","EXTERIOR",2,"2","F2",1,"","HS-1",E],["3-101D",B3,"PUMP ROOM","EXTERIOR",2,"2","F2",1,"","HS-1",E],["3-102",B3,"RESTROOM","PUMP ROOM",1,"1","F1",2,"","HS-3",""]]
+.forEach(([mark,building,from_room,to_room,leaves,door_type,frame_type,k,fire_rating,hardware_set,comments])=>state.rows.push(buildRow({mark,building,from_room,to_room,leaves,leaf_width_in:36,height_in:84,thickness:"1 3/4",door_type,frame_type,head:"H"+k,jamb:"J"+k,sill:"S"+k,fire_rating,hardware_set,comments})));
+renderGrid();
+
+</script>
+</body>
+</html>
